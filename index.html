@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eindbazen Sync Timer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Sky / cloud layer -->
+  <div class="sky"></div>
+
+  <!-- Endboss scene (behind everything interactive) -->
+  <div class="stage" aria-hidden="true">
+    <div class="endboss" data-state="idle">
+      <div class="boss-body">
+        <div class="boss-head">
+          <div class="boss-hair">
+            <span class="hair-tuft hair-tuft--1"></span>
+            <span class="hair-tuft hair-tuft--2"></span>
+            <span class="hair-tuft hair-tuft--3"></span>
+            <span class="hair-tuft hair-tuft--4"></span>
+            <span class="hair-tuft hair-tuft--5"></span>
+          </div>
+          <div class="boss-horn boss-horn--left"></div>
+          <div class="boss-horn boss-horn--right"></div>
+          <div class="boss-brow boss-brow--left"></div>
+          <div class="boss-brow boss-brow--right"></div>
+          <div class="boss-eye boss-eye--left"><span class="pupil"></span></div>
+          <div class="boss-eye boss-eye--right"><span class="pupil"></span></div>
+          <div class="boss-snout">
+            <div class="boss-nostril boss-nostril--left"></div>
+            <div class="boss-nostril boss-nostril--right"></div>
+            <div class="boss-mouth">
+              <div class="boss-fang boss-fang--left"></div>
+              <div class="boss-fang boss-fang--right"></div>
+            </div>
+          </div>
+        </div>
+        <div class="boss-torso">
+          <div class="boss-shoulder boss-shoulder--left">
+            <span class="shoulder-spike"></span>
+            <span class="shoulder-spike"></span>
+            <span class="shoulder-spike"></span>
+          </div>
+          <div class="boss-shoulder boss-shoulder--right">
+            <span class="shoulder-spike"></span>
+            <span class="shoulder-spike"></span>
+            <span class="shoulder-spike"></span>
+          </div>
+          <div class="boss-belly"></div>
+          <div class="boss-shell">
+            <div class="shell-spike shell-spike--1"></div>
+            <div class="shell-spike shell-spike--2"></div>
+            <div class="shell-spike shell-spike--3"></div>
+            <div class="shell-spike shell-spike--4"></div>
+            <div class="shell-spike shell-spike--5"></div>
+          </div>
+          <div class="boss-arm boss-arm--left">
+            <div class="boss-band">
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+            </div>
+            <div class="boss-claw">
+              <span class="claw-nail"></span>
+              <span class="claw-nail"></span>
+              <span class="claw-nail"></span>
+            </div>
+          </div>
+          <div class="boss-arm boss-arm--right">
+            <div class="boss-band">
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+              <span class="band-spike"></span>
+            </div>
+            <div class="boss-claw">
+              <span class="claw-nail"></span>
+              <span class="claw-nail"></span>
+              <span class="claw-nail"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="laptop">
+        <div class="laptop-lid">
+          <div class="laptop-screen">
+            <div class="ide">
+              <div class="ide-titlebar">
+                <span class="ide-dot ide-dot--r"></span>
+                <span class="ide-dot ide-dot--y"></span>
+                <span class="ide-dot ide-dot--g"></span>
+                <span class="ide-title">EINDBAZEN.EXE &mdash; agent</span>
+              </div>
+              <div class="ide-body">
+                <div class="ide-line"><span class="ide-lineno">1</span><span class="ide-prompt">&gt;</span> <span class="ide-user">plan standup sync</span></div>
+                <div class="ide-line"><span class="ide-lineno">2</span><span class="ide-ghost">&nbsp;&nbsp;summarizing blockers&hellip;</span></div>
+                <div class="ide-line"><span class="ide-lineno">3</span><span class="ide-prompt">&gt;</span> <span class="ide-user">draft retro notes</span></div>
+                <div class="ide-line"><span class="ide-lineno">4</span><span class="ide-ghost">&nbsp;&nbsp;querying <span class="ide-kw">eindbazen</span>.notes&hellip;</span></div>
+                <div class="ide-line ide-line--active">
+                  <span class="ide-lineno">5</span><span class="ide-prompt">&gt;</span>
+                  <span id="ideTyping" class="ide-typed"></span><span id="ideCaret" class="ide-caret"></span>
+                </div>
+                <div id="ideError" class="ide-error hidden">
+                  <span class="ide-error-icon">&#9888;</span>
+                  <span class="ide-error-text">error: out of tokens</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="laptop-base"><div class="laptop-hinge"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ground bricks -->
+  <div class="ground" aria-hidden="true"></div>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <h1 class="title">
+      <span class="title-word">EINDBAZEN</span>
+      <span class="title-sub">SYNC TIMER</span>
+    </h1>
+    <button id="settingsBtn" class="icon-btn" aria-label="Open settings" title="Settings">
+      <span class="gear">&#9881;</span>
+    </button>
+  </header>
+
+  <!-- Main timer panel -->
+  <main class="panel">
+    <div id="timerDisplay" class="timer" data-phase="idle">
+      <span id="timerValue">90</span>
+      <span id="timerUnit" class="timer-unit">MIN</span>
+    </div>
+
+    <button id="startBtn" class="start-btn" type="button">
+      <span class="start-btn-inner">START&nbsp;SYNC</span>
+    </button>
+
+    <div id="runControls" class="run-controls hidden">
+      <button id="pauseBtn" class="mini-btn" type="button">Pause</button>
+      <button id="resetBtn" class="mini-btn" type="button">Reset</button>
+    </div>
+  </main>
+
+  <!-- Finish banner -->
+  <div id="finishBanner" class="finish-banner hidden" role="alert">
+    <div class="finish-text">CHECK&#8209;IN&nbsp;TIME!</div>
+    <div id="slackArea" class="slack-area hidden">
+      <button id="slackBtn" class="mini-btn slack-btn" type="button">Alert Slack</button>
+      <span id="slackStatus" class="slack-status"></span>
+    </div>
+    <button id="dismissFinishBtn" class="mini-btn" type="button">Dismiss</button>
+  </div>
+
+  <!-- Confetti container -->
+  <div id="confetti" class="confetti" aria-hidden="true"></div>
+
+  <!-- Settings modal -->
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form id="settingsForm" method="dialog" class="settings-form">
+      <h2 class="settings-title">Settings</h2>
+
+      <label class="field">
+        <span class="field-label">Duration</span>
+        <div class="stepper">
+          <button type="button" class="stepper-btn" data-step="-30" aria-label="Decrease duration">&minus;</button>
+          <span id="durationDisplay" class="stepper-value">90</span>
+          <span class="stepper-unit">min</span>
+          <button type="button" class="stepper-btn" data-step="30" aria-label="Increase duration">+</button>
+        </div>
+        <span class="field-help">30&ndash;240 min, in 30-min steps</span>
+      </label>
+
+      <label class="field toggle">
+        <input type="checkbox" id="effectsToggle" />
+        <span>Sound effects</span>
+      </label>
+
+      <label class="field toggle">
+        <input type="checkbox" id="alarmToggle" />
+        <span>Finish alarm</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Slack alert</span>
+        <select id="slackMode" class="select">
+          <option value="off">Off</option>
+          <option value="manual">Manual button after finish</option>
+          <option value="auto">Auto-send on finish</option>
+        </select>
+        <span class="field-help">Webhook URL lives in Netlify env vars, not here.</span>
+      </label>
+
+      <div class="settings-actions">
+        <button type="button" id="settingsCloseBtn" class="mini-btn">Save &amp; Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
