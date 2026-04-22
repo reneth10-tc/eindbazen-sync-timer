@@ -60,6 +60,8 @@ const slackArea = $('slackArea');
 const slackBtn = $('slackBtn');
 const slackStatus = $('slackStatus');
 const confetti = $('confetti');
+const endTimeDisplay = $('endTimeDisplay');
+const endTimeValue = $('endTimeValue');
 
 // ---------- Timer state machine ----------
 const state = {
@@ -72,6 +74,11 @@ const state = {
   tokenJokeHandle: null,
   tokenJokeShown: false,
 };
+
+function formatEndTime(ms) {
+  const d = new Date(Date.now() + ms);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
 
 function setPhase(p) {
   state.phase = p;
@@ -110,6 +117,8 @@ function startTimer() {
   state.totalMs = totalMs;
   state.halfwayFired = false;
   state.endAt = Date.now() + totalMs;
+  endTimeValue.textContent = formatEndTime(totalMs);
+  endTimeDisplay.classList.remove('hidden');
   setPhase('running');
   runControls.classList.remove('hidden');
   pauseBtn.textContent = 'Pause';
@@ -178,6 +187,7 @@ function resetTimer() {
   setPhase('idle');
   state.halfwayFired = false;
   runControls.classList.add('hidden');
+  endTimeDisplay.classList.add('hidden');
   startBtn.disabled = false;
   endboss.dataset.state = 'idle';
   endboss.classList.remove('stressed', 'roar');
@@ -478,6 +488,17 @@ document.addEventListener('keydown', (e) => {
     else if (state.phase === 'running' || state.phase === 'paused') { e.preventDefault(); pauseToggle(); }
   }
   if (e.key === 'Escape' && state.phase === 'finished') hideFinishBanner();
+});
+
+// ---------- Background tab resilience ----------
+// Browsers throttle setInterval in inactive tabs. When the tab becomes visible
+// again, run tick() immediately so finish() fires without waiting for the next
+// (potentially late) interval, then reset the interval cadence.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.phase === 'running') {
+    tick();
+    scheduleTick();
+  }
 });
 
 // ---------- Init ----------
