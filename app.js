@@ -13,6 +13,7 @@ const defaultSettings = {
   durationMin: 90,
   effects: true,
   alarm: true,
+  roundStart: true,
   slackMode: 'off', // 'off' | 'manual' | 'auto'
 };
 
@@ -48,6 +49,7 @@ const settingsCloseBtn = $('settingsCloseBtn');
 const durationDisplay = $('durationDisplay');
 const effectsToggle = $('effectsToggle');
 const alarmToggle = $('alarmToggle');
+const roundStartToggle = $('roundStartToggle');
 const slackModeSel = $('slackMode');
 const stepperBtns = document.querySelectorAll('.stepper-btn');
 const endboss = document.querySelector('.endboss');
@@ -62,6 +64,7 @@ const slackStatus = $('slackStatus');
 const confetti = $('confetti');
 const endTimeDisplay = $('endTimeDisplay');
 const endTimeValue = $('endTimeValue');
+const shareBtn = $('shareBtn');
 
 // ---------- Timer state machine ----------
 const state = {
@@ -73,10 +76,21 @@ const state = {
   tickHandle: null,
   tokenJokeHandle: null,
   tokenJokeShown: false,
+  tokenJokeClearHandle: null,
 };
 
-function formatEndTime(ms) {
-  const d = new Date(Date.now() + ms);
+let alarmLoopHandle = null;
+function startAlarmLoop() {
+  if (!settings.alarm) return;
+  sfx.alarm();
+  alarmLoopHandle = setInterval(() => sfx.alarm(), 2500);
+}
+function stopAlarmLoop() {
+  if (alarmLoopHandle) { clearInterval(alarmLoopHandle); alarmLoopHandle = null; }
+}
+
+function formatEndTime(endAt) {
+  const d = new Date(endAt);
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
@@ -112,35 +126,49 @@ function renderTime(ms) {
   }
 }
 
-function startTimer() {
+function startTimer({ endAt = null, silent = false } = {}) {
   const totalMs = settings.durationMin * 60 * 1000;
+  const FIVE_MIN_MS = 5 * 60 * 1000;
+  const startAt = settings.roundStart
+    ? Math.ceil(Date.now() / FIVE_MIN_MS) * FIVE_MIN_MS
+    : Date.now();
   state.totalMs = totalMs;
   state.halfwayFired = false;
-  state.endAt = Date.now() + totalMs;
-  endTimeValue.textContent = formatEndTime(totalMs);
+  state.endAt = endAt ?? startAt + totalMs;
+  endTimeValue.textContent = formatEndTime(state.endAt);
   endTimeDisplay.classList.remove('hidden');
   setPhase('running');
   runControls.classList.remove('hidden');
+  shareBtn.classList.remove('hidden');
+  shareBtn.textContent = '🔗';
   pauseBtn.textContent = 'Pause';
   startBtn.disabled = true;
-  startBtn.classList.add('flash');
-  document.body.classList.add('screen-shake');
-  setTimeout(() => document.body.classList.remove('screen-shake'), 500);
-  setTimeout(() => startBtn.classList.remove('flash'), 500);
 
-  // Endboss: roar then → working
-  endboss.classList.add('roar');
-  endboss.dataset.state = 'working';
-  setTimeout(() => endboss.classList.remove('roar'), 1000);
-  startIdeTyping();
-
-  // Schedule the 5-min "out of tokens" joke (only if timer runs long enough)
-  state.tokenJokeShown = false;
-  if (totalMs > 5 * 60 * 1000) {
-    state.tokenJokeHandle = setTimeout(showTokenJoke, 5 * 60 * 1000);
+  if (!silent) {
+    startBtn.classList.add('flash');
+    document.body.classList.add('screen-shake');
+    setTimeout(() => document.body.classList.remove('screen-shake'), 500);
+    setTimeout(() => startBtn.classList.remove('flash'), 500);
+    endboss.classList.add('roar');
+    setTimeout(() => endboss.classList.remove('roar'), 1000);
+    if (settings.effects) sfx.roar();
   }
 
-  if (settings.effects) sfx.roar();
+  endboss.dataset.state = 'working';
+  startIdeTyping();
+
+  // Token joke: schedule relative to session start so shared viewers see it
+  // at the correct elapsed time (or skip it if they're already past the mark).
+  state.tokenJokeShown = false;
+  const sessionStart = state.endAt - totalMs;
+  const timeUntilJoke = sessionStart + 5 * 60 * 1000 - Date.now();
+  if (totalMs > 5 * 60 * 1000) {
+    if (timeUntilJoke > 0) {
+      state.tokenJokeHandle = setTimeout(showTokenJoke, timeUntilJoke);
+    } else {
+      showTokenJoke();
+    }
+  }
 
   scheduleTick();
 }
@@ -161,6 +189,11 @@ function tick() {
     endboss.dataset.state = 'tired';
   }
 
+  if (remaining <= 10 * 60 * 1000 && remaining > 10 * 1000 && endboss.dataset.state !== 'sleeping') {
+    endboss.dataset.state = 'sleeping';
+    stopIdeTyping();
+  }
+
   if (remaining <= 0) {
     finish();
   }
@@ -173,10 +206,15 @@ function pauseToggle() {
     clearInterval(state.tickHandle);
     state.tickHandle = null;
     pauseBtn.textContent = 'Resume';
+    // Hide share while paused — endAt is stale and the link would mislead.
+    shareBtn.classList.add('hidden');
   } else if (state.phase === 'paused') {
     state.endAt = Date.now() + state.remainingMs;
+    endTimeValue.textContent = formatEndTime(state.endAt);
     setPhase('running');
     pauseBtn.textContent = 'Pause';
+    shareBtn.classList.remove('hidden');
+    shareBtn.textContent = '🔗';
     scheduleTick();
   }
 }
@@ -184,15 +222,18 @@ function pauseToggle() {
 function resetTimer() {
   clearInterval(state.tickHandle);
   state.tickHandle = null;
+  stopAlarmLoop();
   setPhase('idle');
   state.halfwayFired = false;
   runControls.classList.add('hidden');
+  shareBtn.classList.add('hidden');
   endTimeDisplay.classList.add('hidden');
   startBtn.disabled = false;
   endboss.dataset.state = 'idle';
   endboss.classList.remove('stressed', 'roar');
   stopIdeTyping();
   hideTokenJoke();
+  clearSessionHash();
   renderIdle();
 }
 
@@ -208,6 +249,7 @@ function finish() {
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
+  shareBtn.classList.add('hidden');
   startBtn.disabled = false;
 
   endboss.dataset.state = 'defeated';
@@ -215,7 +257,7 @@ function finish() {
   stopIdeTyping();
   hideTokenJoke();
 
-  if (settings.alarm) sfx.alarm();
+  startAlarmLoop();
 
   showFinishBanner();
   rainCoins();
@@ -237,8 +279,8 @@ function showFinishBanner() {
 }
 
 function hideFinishBanner() {
+  stopAlarmLoop();
   finishBanner.classList.add('hidden');
-  // After dismiss, return to idle so a new sync can start
   resetTimer();
 }
 
@@ -360,19 +402,62 @@ function stopIdeTyping() {
 function showTokenJoke() {
   if (state.phase !== 'running') return;
   state.tokenJokeShown = true;
-  // Freeze the typing mid-line and show the error underneath
   ideTypingActive = false;
   if (ideTypingHandle) { clearTimeout(ideTypingHandle); ideTypingHandle = null; }
   if (ideTyping) ideTyping.textContent = 'build NewCorp ECH thi';
   if (ideCaret) ideCaret.style.display = 'none';
   if (ideError) ideError.classList.remove('hidden');
+  // Auto-recover after 3 minutes so the IDE doesn't stay "broken"
+  state.tokenJokeClearHandle = setTimeout(() => {
+    if (state.phase !== 'running') return;
+    if (ideError) ideError.classList.add('hidden');
+    if (ideCaret) ideCaret.style.display = '';
+    state.tokenJokeShown = false;
+    startIdeTyping();
+  }, 3 * 60 * 1000);
 }
 
 function hideTokenJoke() {
   if (state.tokenJokeHandle) { clearTimeout(state.tokenJokeHandle); state.tokenJokeHandle = null; }
+  if (state.tokenJokeClearHandle) { clearTimeout(state.tokenJokeClearHandle); state.tokenJokeClearHandle = null; }
   state.tokenJokeShown = false;
   if (ideError) ideError.classList.add('hidden');
   if (ideCaret) ideCaret.style.display = '';
+}
+
+// ---------- Shareable session link ----------
+// Encodes { endAt, durationMin } in the URL hash. Because the timer runs off
+// an absolute endAt timestamp, any client opening the link independently
+// counts down to the same moment — no backend required.
+function parseSharedSession() {
+  if (!window.location.hash) return null;
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const e = Number(params.get('e'));
+  const d = Number(params.get('d'));
+  if (!e || !d) return null;
+  if (d < DURATION_MIN || d > DURATION_MAX || d % DURATION_STEP !== 0) return null;
+  return { endAt: e, durationMin: d };
+}
+
+function clearSessionHash() {
+  if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
+async function copyShareLink() {
+  const url = new URL(window.location.href);
+  url.hash = `e=${state.endAt}&d=${settings.durationMin}`;
+  const link = url.toString();
+  try {
+    await navigator.clipboard.writeText(link);
+    shareBtn.textContent = '✓';
+    setTimeout(() => {
+      if (state.phase === 'running') shareBtn.textContent = '🔗';
+    }, 1500);
+  } catch {
+    window.prompt('Copy this session link:', link);
+  }
 }
 
 // ---------- Slack ----------
@@ -411,6 +496,7 @@ function openSettings() {
   durationDisplay.textContent = String(settings.durationMin);
   effectsToggle.checked = settings.effects;
   alarmToggle.checked = settings.alarm;
+  roundStartToggle.checked = settings.roundStart;
   slackModeSel.value = settings.slackMode;
   updateStepperDisabled();
   if (typeof settingsDialog.showModal === 'function') {
@@ -458,6 +544,10 @@ alarmToggle.addEventListener('change', () => {
   settings.alarm = alarmToggle.checked;
   saveSettings(settings);
 });
+roundStartToggle.addEventListener('change', () => {
+  settings.roundStart = roundStartToggle.checked;
+  saveSettings(settings);
+});
 slackModeSel.addEventListener('change', () => {
   settings.slackMode = slackModeSel.value;
   saveSettings(settings);
@@ -477,6 +567,7 @@ startBtn.addEventListener('click', () => {
 });
 pauseBtn.addEventListener('click', pauseToggle);
 resetBtn.addEventListener('click', resetTimer);
+shareBtn.addEventListener('click', copyShareLink);
 dismissFinishBtn.addEventListener('click', hideFinishBanner);
 slackBtn.addEventListener('click', sendSlack);
 
@@ -502,4 +593,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Init ----------
-renderIdle();
+const shared = parseSharedSession();
+if (shared) {
+  // Override duration for this view only — don't persist to localStorage.
+  settings.durationMin = shared.durationMin;
+  // silent: skip roar/flash since the session is already mid-flight for us.
+  startTimer({ endAt: shared.endAt, silent: true });
+} else {
+  renderIdle();
+}

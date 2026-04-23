@@ -53,11 +53,53 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background:
-    radial-gradient(ellipse 80px 30px at 15% 22%, #fff 60%, transparent 61%),
-    radial-gradient(ellipse 60px 22px at 72% 15%, #fff 60%, transparent 61%),
-    radial-gradient(ellipse 100px 38px at 45% 30%, #fff 60%, transparent 61%),
-    linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bottom) 70%);
+  background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bottom) 70%);
+  overflow: hidden;
+}
+
+.cloud {
+  position: absolute;
+  background: #fff;
+  border-radius: 50px;
+  animation: cloudDrift linear infinite;
+}
+.cloud::before,
+.cloud::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+}
+.cloud--1 {
+  width: 100px; height: 32px;
+  top: 14%;
+  animation-duration: 90s;
+  animation-delay: -30s;
+}
+.cloud--1::before { width: 52px; height: 52px; top: -28px; left: 16px; }
+.cloud--1::after  { width: 36px; height: 36px; top: -18px; left: 52px; }
+
+.cloud--2 {
+  width: 70px; height: 24px;
+  top: 22%;
+  animation-duration: 120s;
+  animation-delay: -70s;
+}
+.cloud--2::before { width: 38px; height: 38px; top: -22px; left: 10px; }
+.cloud--2::after  { width: 26px; height: 26px; top: -14px; left: 38px; }
+
+.cloud--3 {
+  width: 130px; height: 40px;
+  top: 9%;
+  animation-duration: 150s;
+  animation-delay: -10s;
+}
+.cloud--3::before { width: 64px; height: 64px; top: -36px; left: 22px; }
+.cloud--3::after  { width: 44px; height: 44px; top: -24px; left: 70px; }
+
+@keyframes cloudDrift {
+  from { transform: translateX(-15vw); }
+  to   { transform: translateX(115vw); }
 }
 
 /* ---------- Ground (brick strip at bottom) ---------- */
@@ -115,6 +157,13 @@ body {
   letter-spacing: 2px;
 }
 
+.topbar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
 .icon-btn {
   background: var(--coin-gold);
   border: 3px solid #000;
@@ -125,9 +174,14 @@ body {
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: transform 0.08s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .icon-btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000; }
 .icon-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.share-icon-btn { font-size: 18px; }
 
 /* ---------- Main panel ---------- */
 .panel {
@@ -862,6 +916,59 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
   25%      { transform: translateX(-4px); }
   75%      { transform: translateX(4px); }
 }
+
+/* --- State: sleeping (last 10 min) --- */
+.boss-zzz {
+  position: absolute;
+  top: -10px;
+  right: -50px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  font-family: var(--pixel-font);
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+}
+.boss-zzz span:nth-child(1) { font-size: 11px; animation-delay: 0s; }
+.boss-zzz span:nth-child(2) { font-size: 15px; animation-delay: 0.6s; }
+.boss-zzz span:nth-child(3) { font-size: 20px; animation-delay: 1.2s; }
+.boss-zzz span {
+  display: block;
+  animation: zzzFloat 1.8s ease-in infinite;
+  opacity: 0;
+}
+@keyframes zzzFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 0.8; }
+  100% { transform: translateY(-28px) translateX(8px); opacity: 0; }
+}
+
+.endboss[data-state="sleeping"] .boss-zzz { opacity: 1; }
+.endboss[data-state="sleeping"] .boss-eye { height: 6px; top: 100px; }
+.endboss[data-state="sleeping"] .pupil { display: none; }
+.endboss[data-state="sleeping"] .laptop { opacity: 0.5; }
+.endboss[data-state="sleeping"] .boss-arm--left,
+.endboss[data-state="sleeping"] .boss-arm--right {
+  animation: none;
+  transform: rotate(-10deg);
+}
+.endboss[data-state="sleeping"] {
+  animation: bossSleep 5s ease-in-out infinite;
+}
+@keyframes bossSleep {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50%      { transform: translateY(8px) rotate(1deg); }
+}
+.endboss[data-state="sleeping"] .boss-mouth {
+  width: 90px;
+  height: 30px;
+  border-radius: 50%;
+}
+.endboss[data-state="sleeping"] .boss-fang { display: none; }
 
 /* ============================================================
    Finish banner + confetti

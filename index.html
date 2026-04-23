@@ -11,7 +11,11 @@
 </head>
 <body>
   <!-- Sky / cloud layer -->
-  <div class="sky"></div>
+  <div class="sky">
+    <span class="cloud cloud--1"></span>
+    <span class="cloud cloud--2"></span>
+    <span class="cloud cloud--3"></span>
+  </div>
 
   <!-- Endboss scene (behind everything interactive) -->
   <div class="stage" aria-hidden="true">
@@ -39,6 +43,7 @@
               <div class="boss-fang boss-fang--right"></div>
             </div>
           </div>
+          <div class="boss-zzz" aria-hidden="true"><span>z</span><span>Z</span><span>z</span></div>
         </div>
         <div class="boss-torso">
           <div class="boss-shoulder boss-shoulder--left">
@@ -128,9 +133,12 @@
       <span class="title-word">EINDBAZEN</span>
       <span class="title-sub">SYNC TIMER</span>
     </h1>
-    <button id="settingsBtn" class="icon-btn" aria-label="Open settings" title="Settings">
-      <span class="gear">&#9881;</span>
-    </button>
+    <div class="topbar-actions">
+      <button id="settingsBtn" class="icon-btn" aria-label="Open settings" title="Settings">
+        <span class="gear">&#9881;</span>
+      </button>
+      <button id="shareBtn" class="icon-btn share-icon-btn hidden" aria-label="Copy session link" title="Share session">&#x1F517;</button>
+    </div>
   </header>
 
   <!-- Main timer panel -->
@@ -189,6 +197,11 @@
       <label class="field toggle">
         <input type="checkbox" id="alarmToggle" />
         <span>Finish alarm</span>
+      </label>
+
+      <label class="field toggle">
+        <input type="checkbox" id="roundStartToggle" />
+        <span>Round start to next 5 min</span>
       </label>
 
       <label class="field">
