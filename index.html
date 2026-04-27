@@ -115,12 +115,53 @@
                   <span class="ide-error-icon">&#9888;</span>
                   <span class="ide-error-text">error: out of tokens</span>
                 </div>
+                <!-- Bug error overlay: visible while topi is on the laptop -->
+                <div class="ide-bug-error" aria-hidden="true">
+                  <div class="ide-bug-code">500</div>
+                  <div class="ide-bug-msg">oops daar ging iets mis</div>
+                </div>
+                <div id="ideRsi" class="ide-rsi hidden" aria-hidden="true">
+                  <div class="ide-rsi-text">RSI break</div>
+                  <div class="ide-rsi-bar"><div class="ide-rsi-bar-fill"></div></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
         <div class="laptop-base"><div class="laptop-hinge"></div></div>
       </div>
+    </div>
+
+    <!-- Topi the chameleon — walks across scene during running sessions -->
+    <div class="topi" aria-hidden="true">
+      <div class="topi-tail">
+        <span class="topi-tail-seg topi-tail-seg--1"></span>
+        <span class="topi-tail-seg topi-tail-seg--2"></span>
+        <span class="topi-tail-seg topi-tail-seg--3"></span>
+        <span class="topi-tail-seg topi-tail-seg--4"></span>
+        <span class="topi-tail-seg topi-tail-seg--5"></span>
+        <span class="topi-tail-seg topi-tail-seg--6"></span>
+      </div>
+      <div class="topi-body">
+        <span class="topi-crest"></span>
+        <span class="topi-belly"></span>
+      </div>
+      <div class="topi-head">
+        <span class="topi-snout"></span>
+        <span class="topi-mouth"></span>
+        <div class="topi-eye topi-eye--l">
+          <span class="topi-pupil"></span>
+          <span class="topi-glint"></span>
+        </div>
+        <div class="topi-eye topi-eye--r">
+          <span class="topi-pupil"></span>
+          <span class="topi-glint"></span>
+        </div>
+      </div>
+      <div class="topi-leg topi-leg--fl"><span class="topi-foot"></span></div>
+      <div class="topi-leg topi-leg--fr"><span class="topi-foot"></span></div>
+      <div class="topi-leg topi-leg--bl"><span class="topi-foot"></span></div>
+      <div class="topi-leg topi-leg--br"><span class="topi-foot"></span></div>
     </div>
   </div>
 
@@ -173,6 +214,14 @@
   <!-- Confetti container -->
   <div id="confetti" class="confetti" aria-hidden="true"></div>
 
+  <!-- Rain container (blue raindrops, separate from confetti so showers don't clobber finish coins) -->
+  <div id="rainContainer" class="rain-container" aria-hidden="true"></div>
+
+  <!-- Speech bubble (top-level so it overlays the timer panel during topi visits) -->
+  <div class="bubble-layer" aria-hidden="true">
+    <div class="speech-bubble">hey a bug</div>
+  </div>
+
   <!-- Settings modal -->
   <dialog id="settingsDialog" class="settings-dialog">
     <form id="settingsForm" method="dialog" class="settings-form">
@@ -213,6 +262,21 @@
         </select>
         <span class="field-help">Webhook URL lives in Netlify env vars, not here.</span>
       </label>
+
+      <div class="settings-section settings-section--dev">
+        <h3 class="settings-section-title">Dev</h3>
+        <label class="field toggle">
+          <input type="checkbox" id="devModeToggle" />
+          <span>Dev mode</span>
+        </label>
+        <div id="devControls" class="dev-controls hidden">
+          <button type="button" id="triggerTopiBtn" class="mini-btn btn-secondary">&#x1F98E; Trigger topi now</button>
+          <label class="field toggle">
+            <input type="checkbox" id="fastTopiToggle" />
+            <span>Fast topi schedule (5 visits in 60 s)</span>
+          </label>
+        </div>
+      </div>
 
       <div class="settings-actions">
         <button type="button" id="settingsCloseBtn" class="mini-btn">Save &amp; Close</button>

@@ -50,10 +50,14 @@ Calling the Slack webhook directly from the browser would expose the URL to anyo
 
 ## Using real Mario sounds
 
-The default sounds are synthesized (Web Audio square/sawtooth oscillators) so the app ships with no audio files and no IP risk. If you want real SMB clips:
+Most sounds (boss roar, click, start-sync fanfare) are synthesized at runtime via Web Audio square/sawtooth oscillators — no audio files, no IP risk.
 
-1. Drop MP3 files into `assets/sounds/`, e.g. `roar.mp3`, `alarm.mp3`, `click.mp3`.
-2. In [app.js](app.js), swap the `sfx` object from synth calls to `new Audio('assets/sounds/alarm.mp3').play()`.
+The **finish alarm** ships as a real audio file: `assets/sounds/level-complete.mp3` (the SMB level-complete jingle). It's wired up in [app.js](app.js) via `sfx.alarm()` and looped through `alarmAudio.loop` until the user dismisses the finish banner. To swap it out, replace the file or change the path in the `new Audio(...)` call.
+
+To add more real clips:
+
+1. Drop MP3 files into `assets/sounds/`, e.g. `roar.mp3`, `click.mp3`.
+2. In [app.js](app.js), follow the `alarmAudio` pattern: create an `Audio` element at module scope, then call `.play()` from the relevant `sfx` method.
 
 **Note:** real Nintendo audio is copyrighted. This app is intended for internal team use only. Don't redistribute publicly and keep the deployed URL unlisted where practical.
 

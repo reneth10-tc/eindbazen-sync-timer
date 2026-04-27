@@ -29,6 +29,14 @@
   --boss-hair-dark:  #800808;
   --shadow: 4px 4px 0 #000;
   --pixel-font: 'Press Start 2P', system-ui, monospace;
+  /* Topi-specific tokens */
+  --topi-skin:        #fcd225;
+  --topi-skin-light:  #ffe89a;
+  --topi-skin-dark:   #b27a00;
+  --topi-crest:       #d99500;
+  --topi-eye-white:   #ffffff;
+  --topi-eye-pupil:   #111111;
+  --topi-mouth:       #6b3a00;
 }
 
 html, body {
@@ -782,6 +790,7 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
 
 .ide-body {
   flex: 1;
+  position: relative;
   padding: 6px 4px 6px 0;
   line-height: 1.5;
   overflow: hidden;
@@ -838,6 +847,53 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
 }
 @keyframes errorSettle {
   to { background: rgba(255, 60, 60, 0.15); }
+}
+
+/* IDE bug error overlay — fills the IDE body while topi sits on the laptop. */
+.ide-bug-error {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #2a0008;
+  color: #ff5060;
+  text-align: center;
+  font-family: 'Courier New', ui-monospace, monospace;
+  letter-spacing: 1px;
+  z-index: 5;
+  /* subtle scanline shimmer to feel "broken" */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 0, 30, 0.0) 0px,
+    rgba(255, 0, 30, 0.0) 2px,
+    rgba(0, 0, 0, 0.4) 3px,
+    rgba(0, 0, 0, 0.4) 4px
+  );
+}
+.ide-bug-code {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ff8090;
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 3px;
+}
+.ide-bug-msg {
+  font-size: 9px;
+  color: #ffd0d0;
+  padding: 0 6px;
+}
+
+/* Show the bug error whenever topi is on the laptop. */
+body:has(.endboss.has-bug) .ide-bug-error {
+  display: flex;
+  animation: bugErrorFlicker 0.18s steps(1, end) infinite;
+}
+@keyframes bugErrorFlicker {
+  0%, 80%  { opacity: 1; }
+  85%, 95% { opacity: 0.85; }
 }
 
 /* --- State: working --- */
@@ -1128,6 +1184,466 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
   justify-content: flex-end;
   margin-top: 8px;
 }
+
+/* ============================================================
+   TOPI — side-profile bipedal chameleon (faces right toward laptop)
+   ============================================================
+   Layout philosophy: this is a SIDE-PROFILE sprite, not a quadruped.
+   - Vertical body (chameleon stands like Pascal).
+   - One visible eye on the camera-facing side; the other is hidden.
+   - Snout points right; head sits atop the body.
+   - Two visible hind legs (one further, one closer); front "arms"
+     are hidden in this profile.
+   - Long trailing tail curves back from the rear and curls.
+   The 4-leg DOM is repurposed: --bl/--br are the visible hind legs,
+   --fl/--fr are hidden. JS class flips still work.
+   ============================================================ */
+
+.topi {
+  position: absolute;
+  bottom: 96px;
+  left: 0;
+  width: 140px;
+  height: 130px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: visible;
+  will-change: transform, opacity;
+}
+
+/* === TAIL: long curly trail behind the chameleon === */
+.topi-tail {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  width: 80px;
+  height: 70px;
+  z-index: 0;
+}
+
+.topi-tail-seg {
+  position: absolute;
+  background: var(--topi-skin);
+  border: 3px solid #000;
+  box-shadow: inset -2px -2px 0 var(--topi-skin-dark);
+  border-radius: 50%;
+}
+
+/* Base attaches at body's lower-rear (right side of tail container) */
+.topi-tail-seg--1 {
+  width: 24px; height: 18px;
+  bottom: 36px; left: 50px;
+  border-radius: 60% 30% 40% 50%;
+  transform: rotate(10deg);
+}
+.topi-tail-seg--2 {
+  width: 20px; height: 16px;
+  bottom: 22px; left: 40px;
+  border-radius: 50%;
+  transform: rotate(-15deg);
+}
+.topi-tail-seg--3 {
+  width: 16px; height: 14px;
+  bottom: 10px; left: 28px;
+  border-radius: 50%;
+  transform: rotate(-50deg);
+}
+/* Curl bottom */
+.topi-tail-seg--4 {
+  width: 13px; height: 13px;
+  bottom: 4px; left: 18px;
+  border-radius: 50%;
+  transform: rotate(-100deg);
+}
+/* Curling back inward */
+.topi-tail-seg--5 {
+  width: 10px; height: 10px;
+  bottom: 12px; left: 12px;
+  border-radius: 50%;
+  transform: rotate(-150deg);
+}
+/* Tip pointing inward */
+.topi-tail-seg--6 {
+  width: 8px; height: 8px;
+  bottom: 22px; left: 16px;
+  border-radius: 50%;
+  transform: rotate(-200deg);
+}
+
+/* === BODY: vertical oval, slight backward lean === */
+.topi-body {
+  position: absolute;
+  bottom: 18px;
+  left: 54px;
+  width: 50px;
+  height: 58px;
+  background: var(--topi-skin);
+  border: 4px solid #000;
+  border-radius: 40% 50% 38% 44% / 50% 55% 45% 45%;
+  box-shadow:
+    inset 6px 5px 0 var(--topi-skin-light),
+    inset -8px -7px 0 var(--topi-skin-dark);
+  transform: rotate(-4deg);
+  transform-origin: bottom center;
+  z-index: 2;
+}
+
+/* CREST: ridge along the back (left edge of body in side view) */
+.topi-crest {
+  position: absolute;
+  top: 6px;
+  left: -4px;
+  width: 12px;
+  height: 36px;
+  background: var(--topi-crest);
+  border: 3px solid #000;
+  border-radius: 70% 20% 30% 70%;
+  /* spine bumps */
+  box-shadow:
+    inset -2px -1px 0 #8a5e00;
+  z-index: 1;
+}
+
+/* BELLY: lighter rounded patch on the front (right side) */
+.topi-belly {
+  position: absolute;
+  bottom: 6px;
+  right: 4px;
+  width: 24px;
+  height: 30px;
+  background: var(--topi-skin-light);
+  border: 2px solid #000;
+  border-radius: 50%;
+  opacity: 0.95;
+  z-index: 1;
+}
+
+/* === HEAD: triangular-rounded, snout pointing right === */
+.topi-head {
+  position: absolute;
+  bottom: 66px;
+  left: 50px;
+  width: 50px;
+  height: 40px;
+  background: var(--topi-skin);
+  border: 4px solid #000;
+  border-radius: 55% 75% 30% 35%;
+  box-shadow:
+    inset 5px 4px 0 var(--topi-skin-light),
+    inset -7px -5px 0 var(--topi-skin-dark);
+  z-index: 4;
+}
+
+/* SNOUT: bump pointing right with a small chin */
+.topi-snout {
+  position: absolute;
+  top: 18px;
+  right: -10px;
+  width: 16px;
+  height: 18px;
+  background: var(--topi-skin);
+  border: 4px solid #000;
+  border-radius: 30% 70% 60% 30%;
+  box-shadow: inset -3px -3px 0 var(--topi-skin-dark);
+}
+
+/* MOUTH: little smile along the underside of the snout */
+.topi-mouth {
+  position: absolute;
+  top: 28px;
+  right: -2px;
+  width: 12px;
+  height: 4px;
+  background: var(--topi-mouth);
+  border-radius: 0 0 50% 50%;
+  z-index: 5;
+}
+
+/* === EYE: ONE prominent eye (side profile) === */
+/* Hide the second eye — chameleon side view shows only one. */
+.topi-eye--r { display: none; }
+
+.topi-eye {
+  position: absolute;
+  top: 4px;
+  left: 22px;
+  width: 24px;
+  height: 24px;
+  background: var(--topi-eye-white);
+  border: 3px solid #000;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 5;
+  box-shadow: inset -3px -3px 0 #f0e8d0;
+}
+
+.topi-pupil {
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  width: 11px;
+  height: 11px;
+  background: var(--topi-eye-pupil);
+  border-radius: 50%;
+}
+
+.topi-glint {
+  position: absolute;
+  top: 3px;
+  left: 13px;
+  width: 5px;
+  height: 5px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+/* === LEGS === */
+/* Hide the front "arm" pair — invisible in side profile. */
+.topi-leg--fl,
+.topi-leg--fr {
+  display: none;
+}
+
+/* Two visible hind legs forming bipedal stance.
+   --bl is the FAR leg (back, partly behind body): darker, behind body.
+   --br is the NEAR leg (front): lighter, in front of body. */
+.topi-leg--bl,
+.topi-leg--br {
+  position: absolute;
+  bottom: 0;
+  width: 14px;
+  height: 22px;
+  background: var(--topi-skin);
+  border: 4px solid #000;
+  border-radius: 6px 8px 4px 4px;
+  box-shadow:
+    inset 3px 2px 0 var(--topi-skin-light),
+    inset -3px -3px 0 var(--topi-skin-dark);
+}
+
+/* Far hind leg — sits BEHIND the body (lower z, slightly darkened) */
+.topi-leg--bl {
+  left: 64px;
+  z-index: 1;
+  background: var(--topi-skin-dark);
+  box-shadow: inset -3px -3px 0 #6b4900;
+}
+
+/* Near hind leg — sits IN FRONT of the body */
+.topi-leg--br {
+  left: 80px;
+  z-index: 3;
+}
+
+/* FOOT block (claw cluster) at the base of each leg */
+.topi-foot {
+  position: absolute;
+  bottom: -4px;
+  left: -3px;
+  width: 18px;
+  height: 7px;
+  background: var(--topi-skin-dark);
+  border: 2px solid #000;
+  border-radius: 0 0 8px 8px;
+  /* claw slits */
+  box-shadow:
+    inset 5px 0 0 -2px #000,
+    inset -5px 0 0 -2px #000;
+}
+
+/* === WALK ANIMATION === */
+/* Body bobs gently while walking. Keeps the -4deg base tilt. */
+@keyframes topiBob {
+  0%, 49%   { transform: rotate(-4deg) translateY(0); }
+  50%, 100% { transform: rotate(-4deg) translateY(-2px); }
+}
+.topi--walking .topi-body {
+  animation: topiBob 0.4s steps(1, end) infinite;
+}
+
+/* Hind legs alternate stepping. */
+@keyframes topiStep {
+  0%, 49%   { transform: translateY(0); }
+  50%, 100% { transform: translateY(-3px); }
+}
+.topi--walking .topi-leg--bl {
+  animation: topiStep 0.4s steps(1, end) infinite;
+}
+.topi--walking .topi-leg--br {
+  animation: topiStep 0.4s steps(1, end) infinite 0.2s;
+}
+
+/* Tail subtle sway */
+@keyframes topiTailSway {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px) translateY(-1px); }
+}
+.topi--walking .topi-tail {
+  animation: topiTailSway 0.8s ease-in-out infinite;
+}
+
+/* Head bobs slightly with the body */
+@keyframes topiHeadBob {
+  0%, 49%   { transform: translateY(0); }
+  50%, 100% { transform: translateY(-2px); }
+}
+.topi--walking .topi-head {
+  animation: topiHeadBob 0.4s steps(1, end) infinite;
+}
+
+/* === ON-LAPTOP POSE: standing still, head dipped slightly toward screen === */
+.topi--onLaptop .topi-body {
+  animation: none;
+  transform: rotate(-4deg);
+}
+.topi--onLaptop .topi-head {
+  animation: none;
+  transform: rotate(-3deg) translateY(0);
+}
+.topi--onLaptop .topi-leg--bl,
+.topi--onLaptop .topi-leg--br {
+  animation: none;
+  transform: none;
+}
+.topi--onLaptop .topi-tail {
+  animation: none;
+}
+
+/* ============================================================
+   SPEECH BUBBLE — body-level overlay so it floats above the timer
+   panel during topi visits without ever occluding the buttons.
+   Visibility is driven by :has(.endboss.has-bug) — no JS change.
+   ============================================================ */
+.bubble-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  /* Push bubble up to roughly above the boss head.
+     Endboss is 460px tall, anchored 96px from viewport bottom,
+     so head top ≈ 100vh - 522px. Bubble sits ~50px above that. */
+  align-items: flex-end;
+  padding-bottom: 580px;
+}
+
+.speech-bubble {
+  position: relative;
+  background: #fff;
+  color: #000;
+  font-family: var(--pixel-font);
+  font-size: 18px;
+  letter-spacing: 2px;
+  padding: 16px 24px;
+  border: 5px solid #000;
+  border-radius: 10px;
+  white-space: nowrap;
+  box-shadow: 5px 5px 0 #000;
+  opacity: 0;
+  transform-origin: bottom center;
+  transition: opacity 0.25s ease-out;
+  pointer-events: none;
+}
+
+/* Speech-bubble tail (downward triangle pointing at the boss) */
+.speech-bubble::before,
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+.speech-bubble::before {
+  bottom: -22px;
+  margin-left: -14px;
+  border-width: 22px 14px 0 14px;
+  border-color: #000 transparent transparent transparent;
+}
+.speech-bubble::after {
+  bottom: -14px;
+  margin-left: -9px;
+  border-width: 14px 9px 0 9px;
+  border-color: #fff transparent transparent transparent;
+}
+
+@keyframes bubbleWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-2deg); }
+}
+
+body:has(.endboss.has-bug) .speech-bubble {
+  opacity: 1;
+  animation: bubbleWiggle 1.2s ease-in-out infinite;
+}
+
+/* Mobile: boss is scaled to ~0.62, so head sits much lower — adjust offset */
+@media (max-width: 640px) {
+  .bubble-layer { padding-bottom: 360px; }
+  .speech-bubble { font-size: 14px; padding: 12px 18px; }
+}
+
+/* ============================================================
+   ANGRY BOSS — .endboss.angry overlay (additive, no state replaced)
+   ============================================================ */
+
+/* Angry brows slam inward and down */
+.endboss.angry .boss-brow--left  { transform: rotate(-25deg) translate(4px, 6px); background: #600; }
+.endboss.angry .boss-brow--right { transform: rotate(25deg)  translate(-4px, 6px); background: #600; }
+
+/* Pupils dart to center (annoyed look) */
+.endboss.angry .pupil { animation: none; transform: translateX(6px); }
+
+/* Mouth tightens to a thin frown */
+.endboss.angry .boss-mouth {
+  width: 70px;
+  height: 10px;
+  border-radius: 0 0 50% 50%;
+  background: #2a0006;
+}
+.endboss.angry .boss-fang { display: none; }
+
+/* Small jitter shake — faster/shorter than bossStressed */
+.endboss.angry {
+  animation: bossAngry 0.25s ease-in-out infinite !important;
+}
+@keyframes bossAngry {
+  0%, 100% { transform: translate(0, 0); }
+  25%       { transform: translate(-3px, 1px); }
+  75%       { transform: translate(3px, -1px); }
+}
+
+/* ============================================================
+   DEV SECTION (settings dialog)
+   ============================================================ */
+.settings-section--dev {
+  border-top: 2px dashed #555;
+  padding-top: 14px;
+  opacity: 0.85;
+}
+.settings-section-title {
+  font-size: 10px;
+  color: #ffd080;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  text-shadow: 1px 1px 0 #000;
+}
+.dev-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.btn-secondary {
+  background: #444;
+  color: #fff;
+  border-color: #000;
+  font-size: 10px;
+}
+.btn-secondary:hover { background: #666; }
 
 /* ============================================================
    Mobile-ish responsive (desktop-first, but don't be broken)

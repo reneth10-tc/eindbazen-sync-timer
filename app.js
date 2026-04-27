@@ -15,6 +15,8 @@ const defaultSettings = {
   alarm: true,
   roundStart: true,
   slackMode: 'off', // 'off' | 'manual' | 'auto'
+  devMode: false,
+  fastTopi: false,
 };
 
 // ---------- Settings ----------
@@ -53,6 +55,11 @@ const roundStartToggle = $('roundStartToggle');
 const slackModeSel = $('slackMode');
 const stepperBtns = document.querySelectorAll('.stepper-btn');
 const endboss = document.querySelector('.endboss');
+const devModeToggle = $('devModeToggle');
+const devControls = $('devControls');
+const triggerTopiBtn = $('triggerTopiBtn');
+const fastTopiToggle = $('fastTopiToggle');
+const topiEl = document.querySelector('.topi');
 const ideTyping = $('ideTyping');
 const ideCaret = $('ideCaret');
 const ideError = $('ideError');
@@ -77,16 +84,22 @@ const state = {
   tokenJokeHandle: null,
   tokenJokeShown: false,
   tokenJokeClearHandle: null,
+  topiHandles: [],  // setTimeout handles for topi visits
+  topiInFlight: false, // debounce for manual trigger
 };
 
-let alarmLoopHandle = null;
+const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
+alarmAudio.preload = 'auto';
+
 function startAlarmLoop() {
   if (!settings.alarm) return;
+  alarmAudio.loop = true;
   sfx.alarm();
-  alarmLoopHandle = setInterval(() => sfx.alarm(), 2500);
 }
 function stopAlarmLoop() {
-  if (alarmLoopHandle) { clearInterval(alarmLoopHandle); alarmLoopHandle = null; }
+  alarmAudio.loop = false;
+  alarmAudio.pause();
+  alarmAudio.currentTime = 0;
 }
 
 function formatEndTime(endAt) {
@@ -170,6 +183,7 @@ function startTimer({ endAt = null, silent = false } = {}) {
     }
   }
 
+  scheduleTopiVisits();
   scheduleTick();
 }
 
@@ -223,6 +237,7 @@ function resetTimer() {
   clearInterval(state.tickHandle);
   state.tickHandle = null;
   stopAlarmLoop();
+  cancelTopi();
   setPhase('idle');
   state.halfwayFired = false;
   runControls.classList.add('hidden');
@@ -246,6 +261,7 @@ function renderIdle() {
 function finish() {
   clearInterval(state.tickHandle);
   state.tickHandle = null;
+  cancelTopi();
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
@@ -339,11 +355,22 @@ const sfx = {
     beep(880, 0.05, 'square', 0.04);
   },
   alarm() {
-    // simple SMB-ish level-clear fanfare: arpeggio up, then sustain
-    const notes = [523, 659, 784, 1047, 1319]; // C5 E5 G5 C6 E6
-    notes.forEach((f, i) => beep(f, 0.16, 'square', 0.1, i * 0.12));
-    beep(1319, 0.5, 'square', 0.12, notes.length * 0.12);
-    beep(1568, 0.7, 'triangle', 0.09, notes.length * 0.12 + 0.1);
+    // Real SMB level-complete jingle (assets/sounds/level-complete.mp3).
+    // Internal-use only — see README.md "Using real Mario sounds".
+    try {
+      alarmAudio.currentTime = 0;
+      const p = alarmAudio.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* autoplay blocked / hidden tab — ignore */ }
+  },
+  startSync() {
+    // Original 8-bit-style "go" fanfare: short ascending arpeggio + sustained tonic.
+    // Uses square waves to match the existing chiptune palette (sfx.alarm uses the same).
+    // Note choice is original — picked to feel like an arcade level-start, not to copy any specific game.
+    const arp = [392, 523, 659, 784]; // G4 C5 E5 G5 — open major triad climb
+    arp.forEach((f, i) => beep(f, 0.1, 'square', 0.09, i * 0.08));
+    beep(988, 0.18, 'square',   0.10, arp.length * 0.08);         // B5 accent
+    beep(784, 0.32, 'triangle', 0.08, arp.length * 0.08 + 0.12);  // G5 sustain pad
   },
 };
 
@@ -425,6 +452,106 @@ function hideTokenJoke() {
   if (ideCaret) ideCaret.style.display = '';
 }
 
+// ---------- Topi cameos ----------
+// Deterministic PRNG (mulberry32) seeded from endAt so shared-link viewers
+// see topi at identical wall-clock moments.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function scheduleTopiVisits() {
+  // Cancel any leftover handles from a previous session
+  cancelTopi();
+
+  const VISITS = 5;
+  const TAIL_MS = 20 * 1000; // leave 20s clear at the end
+  const now = Date.now();
+  const sessionStart = state.endAt - state.totalMs;
+
+  // Compressed window when fastTopi dev mode is on
+  const usesFast = settings.devMode && settings.fastTopi;
+  const windowEnd = usesFast ? sessionStart + 60 * 1000 : state.endAt - TAIL_MS;
+  const windowMs = windowEnd - sessionStart;
+  if (windowMs <= 0) return;
+
+  const rand = mulberry32(Math.floor(state.endAt / 1000)); // seed from endAt seconds
+
+  for (let i = 0; i < VISITS; i++) {
+    // Pick a random offset within this bucket
+    const bucketStart = sessionStart + (windowMs / VISITS) * i;
+    const bucketEnd   = sessionStart + (windowMs / VISITS) * (i + 1);
+    const when = bucketStart + rand() * (bucketEnd - bucketStart);
+    const delay = when - now;
+    if (delay < 0) continue; // already past — skip
+    const h = setTimeout(runTopiVisit, delay);
+    state.topiHandles.push(h);
+  }
+}
+
+function runTopiVisit() {
+  if (state.topiInFlight) return; // debounce
+  if (!topiEl) return;
+  state.topiInFlight = true;
+
+  // Phase 1: walk in from left (~5 s)
+  topiEl.className = 'topi topi--walking';
+  topiEl.style.visibility = 'visible';
+  topiEl.style.opacity = '1';
+  topiEl.style.transform = 'translateX(-15vw)';
+  // Force reflow so the starting position is applied before transition begins
+  void topiEl.offsetWidth;
+  topiEl.style.transition = 'transform 5s linear';
+  topiEl.style.transform = 'translateX(calc(50vw - 240px))'; // approx laptop x
+
+  const h1 = setTimeout(() => {
+    // Phase 2: on laptop (~5 s)
+    topiEl.className = 'topi topi--onLaptop';
+    topiEl.style.transition = 'transform 0.5s ease-out';
+    topiEl.style.transform = 'translateX(calc(50vw - 240px)) translateY(-40px)';
+    endboss.classList.add('angry', 'has-bug');
+
+    const h2 = setTimeout(() => {
+      // Phase 3: walk out to right (~5 s)
+      topiEl.className = 'topi topi--walking';
+      topiEl.style.transition = 'transform 5s linear';
+      topiEl.style.transform = 'translateX(115vw)';
+      endboss.classList.remove('angry', 'has-bug');
+
+      const h3 = setTimeout(() => {
+        // Cleanup
+        topiEl.style.visibility = 'hidden';
+        topiEl.style.opacity = '0';
+        topiEl.style.transition = '';
+        topiEl.style.transform = '';
+        topiEl.className = 'topi';
+        state.topiInFlight = false;
+      }, 5200);
+      state.topiHandles.push(h3);
+    }, 5000);
+    state.topiHandles.push(h2);
+  }, 5200);
+  state.topiHandles.push(h1);
+}
+
+function cancelTopi() {
+  state.topiHandles.forEach((h) => clearTimeout(h));
+  state.topiHandles = [];
+  state.topiInFlight = false;
+  endboss.classList.remove('angry', 'has-bug');
+  if (topiEl) {
+    topiEl.style.visibility = 'hidden';
+    topiEl.style.opacity = '0';
+    topiEl.style.transition = '';
+    topiEl.style.transform = '';
+    topiEl.className = 'topi';
+  }
+}
+
 // ---------- Shareable session link ----------
 // Encodes { endAt, durationMin } in the URL hash. Because the timer runs off
 // an absolute endAt timestamp, any client opening the link independently
@@ -498,6 +625,9 @@ function openSettings() {
   alarmToggle.checked = settings.alarm;
   roundStartToggle.checked = settings.roundStart;
   slackModeSel.value = settings.slackMode;
+  if (devModeToggle) devModeToggle.checked = settings.devMode;
+  if (fastTopiToggle) fastTopiToggle.checked = settings.fastTopi;
+  applyDevMode();
   updateStepperDisabled();
   if (typeof settingsDialog.showModal === 'function') {
     settingsDialog.showModal();
@@ -553,6 +683,38 @@ slackModeSel.addEventListener('change', () => {
   saveSettings(settings);
 });
 
+// ---------- Dev controls ----------
+function applyDevMode() {
+  if (devControls) {
+    devControls.classList.toggle('hidden', !settings.devMode);
+  }
+}
+
+if (devModeToggle) {
+  devModeToggle.addEventListener('change', () => {
+    settings.devMode = devModeToggle.checked;
+    saveSettings(settings);
+    applyDevMode();
+  });
+}
+
+if (triggerTopiBtn) {
+  triggerTopiBtn.addEventListener('click', () => {
+    // Close settings so the animation is visible
+    closeSettings();
+    // Small delay to let dialog close animation settle; track so cancelTopi can clear it
+    const h = setTimeout(runTopiVisit, 80);
+    state.topiHandles.push(h);
+  });
+}
+
+if (fastTopiToggle) {
+  fastTopiToggle.addEventListener('change', () => {
+    settings.fastTopi = fastTopiToggle.checked;
+    saveSettings(settings);
+  });
+}
+
 settingsBtn.addEventListener('click', openSettings);
 settingsCloseBtn.addEventListener('click', closeSettings);
 settingsDialog.addEventListener('close', () => {
@@ -563,6 +725,7 @@ settingsDialog.addEventListener('close', () => {
 startBtn.addEventListener('click', () => {
   // Unlock audio on first interaction
   getAudioCtx();
+  if (settings.effects) sfx.startSync();
   startTimer();
 });
 pauseBtn.addEventListener('click', pauseToggle);
