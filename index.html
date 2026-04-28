@@ -124,6 +124,13 @@
                   <div class="ide-rsi-text">RSI break</div>
                   <div class="ide-rsi-bar"><div class="ide-rsi-bar-fill"></div></div>
                 </div>
+                <div id="ideDeploy" class="ide-deploy hidden" aria-hidden="true">
+                  <div class="ide-deploy-text">
+                    <div class="ide-deploy-line" id="ideDeployLine1"></div>
+                    <div class="ide-deploy-line ide-deploy-warning" id="ideDeployLine2"></div>
+                    <span id="ideDeployCaret" class="ide-deploy-caret">&#9608;</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -178,7 +185,8 @@
       <button id="settingsBtn" class="icon-btn" aria-label="Open settings" title="Settings">
         <span class="gear">&#9881;</span>
       </button>
-      <button id="shareBtn" class="icon-btn share-icon-btn hidden" aria-label="Copy session link" title="Share session">&#x1F517;</button>
+      <button id="shareBtn" class="icon-btn share-icon-btn" aria-label="Copy session link" title="Share session" disabled>&#x1F517;</button>
+      <button id="clockBtn" class="icon-btn" aria-label="Set end time" title="Set end time" aria-pressed="false">&#x1F551;</button>
     </div>
   </header>
 
@@ -271,6 +279,9 @@
         </label>
         <div id="devControls" class="dev-controls hidden">
           <button type="button" id="triggerTopiBtn" class="mini-btn btn-secondary">&#x1F98E; Trigger topi now</button>
+          <button type="button" id="triggerRsiBtn" class="mini-btn btn-secondary">&#x1F9D8; Trigger RSI break</button>
+          <button type="button" id="triggerRainBtn" class="mini-btn btn-secondary">&#x1F327; Trigger rain</button>
+          <button type="button" id="triggerFinishBtn" class="mini-btn btn-secondary">&#x1F3C1; Trigger finish</button>
           <label class="field toggle">
             <input type="checkbox" id="fastTopiToggle" />
             <span>Fast topi schedule (5 visits in 60 s)</span>
@@ -280,6 +291,31 @@
 
       <div class="settings-actions">
         <button type="button" id="settingsCloseBtn" class="mini-btn">Save &amp; Close</button>
+      </div>
+      <div class="settings-version">v<span id="appVersion"></span></div>
+    </form>
+  </dialog>
+
+  <!-- Time picker dialog -->
+  <dialog id="timePickerDialog" class="settings-dialog time-picker-dialog">
+    <form method="dialog" class="settings-form">
+      <h2 class="settings-title">End time</h2>
+      <div class="time-picker">
+        <div class="stepper time-stepper">
+          <button type="button" class="stepper-btn" data-tp-step="hour:1" aria-label="Hour up">&#9650;</button>
+          <span id="tpHourDisplay" class="stepper-value">14</span>
+          <button type="button" class="stepper-btn" data-tp-step="hour:-1" aria-label="Hour down">&#9660;</button>
+        </div>
+        <span class="time-colon">:</span>
+        <div class="stepper time-stepper">
+          <button type="button" class="stepper-btn" data-tp-step="min:5" aria-label="Minute up">&#9650;</button>
+          <span id="tpMinDisplay" class="stepper-value">00</span>
+          <button type="button" class="stepper-btn" data-tp-step="min:-5" aria-label="Minute down">&#9660;</button>
+        </div>
+      </div>
+      <div class="settings-actions">
+        <button type="button" id="tpOkBtn" class="mini-btn">OK</button>
+        <button type="button" id="tpCancelBtn" class="mini-btn btn-secondary">Cancel</button>
       </div>
     </form>
   </dialog>

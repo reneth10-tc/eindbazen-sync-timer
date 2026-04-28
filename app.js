@@ -4,6 +4,7 @@
 
 'use strict';
 
+const APP_VERSION = '1.3.0';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -25,7 +26,16 @@ function loadSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...defaultSettings };
     const parsed = JSON.parse(raw);
-    return { ...defaultSettings, ...parsed };
+    const merged = { ...defaultSettings, ...parsed };
+    if (typeof merged.durationMin !== 'number'
+        || !Number.isFinite(merged.durationMin)
+        || merged.durationMin < DURATION_MIN
+        || merged.durationMin > DURATION_MAX) {
+      merged.durationMin = defaultSettings.durationMin;
+      // Repair the persisted entry so this user is healed on next reload.
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged)); } catch {}
+    }
+    return merged;
   } catch {
     return { ...defaultSettings };
   }
@@ -53,11 +63,14 @@ const effectsToggle = $('effectsToggle');
 const alarmToggle = $('alarmToggle');
 const roundStartToggle = $('roundStartToggle');
 const slackModeSel = $('slackMode');
-const stepperBtns = document.querySelectorAll('.stepper-btn');
+const stepperBtns = document.querySelectorAll('.stepper:not(.time-stepper) .stepper-btn');
 const endboss = document.querySelector('.endboss');
 const devModeToggle = $('devModeToggle');
 const devControls = $('devControls');
 const triggerTopiBtn = $('triggerTopiBtn');
+const triggerRsiBtn = $('triggerRsiBtn');
+const triggerRainBtn = $('triggerRainBtn');
+const triggerFinishBtn = $('triggerFinishBtn');
 const fastTopiToggle = $('fastTopiToggle');
 const topiEl = document.querySelector('.topi');
 const ideTyping = $('ideTyping');
@@ -69,9 +82,22 @@ const slackArea = $('slackArea');
 const slackBtn = $('slackBtn');
 const slackStatus = $('slackStatus');
 const confetti = $('confetti');
+const rainContainer = $('rainContainer');
+const ideRsi = $('ideRsi');
+const ideDeploy = $('ideDeploy');
+const ideDeployLine1 = $('ideDeployLine1');
+const ideDeployLine2 = $('ideDeployLine2');
+const ideDeployCaret = $('ideDeployCaret');
 const endTimeDisplay = $('endTimeDisplay');
 const endTimeValue = $('endTimeValue');
 const shareBtn = $('shareBtn');
+const clockBtn = $('clockBtn');
+const timePickerDialog = $('timePickerDialog');
+const tpHourDisplay = $('tpHourDisplay');
+const tpMinDisplay = $('tpMinDisplay');
+const tpOkBtn = $('tpOkBtn');
+const tpCancelBtn = $('tpCancelBtn');
+const tpStepperBtns = document.querySelectorAll('.time-stepper .stepper-btn');
 
 // ---------- Timer state machine ----------
 const state = {
@@ -86,10 +112,17 @@ const state = {
   tokenJokeClearHandle: null,
   topiHandles: [],  // setTimeout handles for topi visits
   topiInFlight: false, // debounce for manual trigger
+  rsiHandles: [],
+  rsiActive: false,
+  rainHandles: [],
+  cloudCoinHandles: [],
+  deployTypeHandles: [],
 };
 
 const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
 alarmAudio.preload = 'auto';
+const startAudio = new Audio('assets/sounds/sync-start.mp3');
+startAudio.preload = 'auto';
 
 function startAlarmLoop() {
   if (!settings.alarm) return;
@@ -109,7 +142,9 @@ function formatEndTime(endAt) {
 
 function setPhase(p) {
   state.phase = p;
-  timerDisplay.dataset.phase = p === 'running' || p === 'paused' ? 'running' : p;
+  timerDisplay.dataset.phase = (p === 'running' || p === 'paused') ? 'running'
+    : (p === 'deploying') ? 'idle'
+    : p;
 }
 
 function msToDisplay(ms) {
@@ -140,6 +175,7 @@ function renderTime(ms) {
 }
 
 function startTimer({ endAt = null, silent = false } = {}) {
+  if (state.phase === 'deploying') exitDeployState();
   const totalMs = settings.durationMin * 60 * 1000;
   const FIVE_MIN_MS = 5 * 60 * 1000;
   const startAt = settings.roundStart
@@ -152,7 +188,7 @@ function startTimer({ endAt = null, silent = false } = {}) {
   endTimeDisplay.classList.remove('hidden');
   setPhase('running');
   runControls.classList.remove('hidden');
-  shareBtn.classList.remove('hidden');
+  shareBtn.disabled = false;
   shareBtn.textContent = '🔗';
   pauseBtn.textContent = 'Pause';
   startBtn.disabled = true;
@@ -184,6 +220,8 @@ function startTimer({ endAt = null, silent = false } = {}) {
   }
 
   scheduleTopiVisits();
+  scheduleRsiBreaks();
+  scheduleRainShowers();
   scheduleTick();
 }
 
@@ -220,14 +258,14 @@ function pauseToggle() {
     clearInterval(state.tickHandle);
     state.tickHandle = null;
     pauseBtn.textContent = 'Resume';
-    // Hide share while paused — endAt is stale and the link would mislead.
-    shareBtn.classList.add('hidden');
+    // Disable share while paused — endAt is stale and the link would mislead.
+    shareBtn.disabled = true;
   } else if (state.phase === 'paused') {
     state.endAt = Date.now() + state.remainingMs;
     endTimeValue.textContent = formatEndTime(state.endAt);
     setPhase('running');
     pauseBtn.textContent = 'Pause';
-    shareBtn.classList.remove('hidden');
+    shareBtn.disabled = false;
     shareBtn.textContent = '🔗';
     scheduleTick();
   }
@@ -238,10 +276,16 @@ function resetTimer() {
   state.tickHandle = null;
   stopAlarmLoop();
   cancelTopi();
+  cancelRsi();
+  cancelRain();
+  stopCloudCoinShowers();
+  cancelDeployTyping();
+  ideDeploy.classList.add('hidden');
   setPhase('idle');
   state.halfwayFired = false;
   runControls.classList.add('hidden');
-  shareBtn.classList.add('hidden');
+  shareBtn.disabled = true;
+  shareBtn.textContent = '🔗';
   endTimeDisplay.classList.add('hidden');
   startBtn.disabled = false;
   endboss.dataset.state = 'idle';
@@ -249,6 +293,9 @@ function resetTimer() {
   stopIdeTyping();
   hideTokenJoke();
   clearSessionHash();
+  // Discard any in-memory durationMin override (from time picker or shared link)
+  // so the idle display falls back to the user's stored default.
+  settings = loadSettings();
   renderIdle();
 }
 
@@ -262,10 +309,12 @@ function finish() {
   clearInterval(state.tickHandle);
   state.tickHandle = null;
   cancelTopi();
+  cancelRsi();
+  cancelRain();
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
-  shareBtn.classList.add('hidden');
+  shareBtn.disabled = true;
   startBtn.disabled = false;
 
   endboss.dataset.state = 'defeated';
@@ -295,9 +344,120 @@ function showFinishBanner() {
 }
 
 function hideFinishBanner() {
+  enterDeployState();
+}
+
+function enterDeployState() {
   stopAlarmLoop();
   finishBanner.classList.add('hidden');
-  resetTimer();
+  setPhase('deploying');
+  startBtn.disabled = false;
+  runControls.classList.add('hidden');
+  shareBtn.disabled = true;
+  endTimeDisplay.classList.add('hidden');
+  stopIdeTyping();
+  hideTokenJoke();
+  // Use a dedicated 'deploying' state so the laptop is visible (default .laptop has
+  // opacity 0; only specific states reveal it) and the bossDefeated animation no longer applies.
+  endboss.dataset.state = 'deploying';
+  endboss.classList.remove('stressed', 'roar');
+  ideDeploy.classList.remove('hidden');
+  typeDeployText();
+  startCloudCoinShowers();
+}
+
+function exitDeployState() {
+  ideDeploy.classList.add('hidden');
+  cancelDeployTyping();
+  stopCloudCoinShowers();
+}
+
+const DEPLOY_LINE_1 = 'deploying component, fingers crossed';
+const DEPLOY_LINE_2 = "don't hit the tester in case of a system failure";
+
+function typeDeployText() {
+  cancelDeployTyping();
+  ideDeployLine1.textContent = '';
+  ideDeployLine2.textContent = '';
+  ideDeployCaret.style.display = '';
+  // Place caret next to line 1 while typing it, then move to line 2.
+  ideDeployLine1.appendChild(ideDeployCaret);
+
+  let i = 0;
+  function typeLine1() {
+    if (state.phase !== 'deploying') return;
+    if (i < DEPLOY_LINE_1.length) {
+      ideDeployLine1.insertBefore(document.createTextNode(DEPLOY_LINE_1[i]), ideDeployCaret);
+      if (settings.effects && DEPLOY_LINE_1[i] !== ' ') sfx.click();
+      i++;
+      const h = setTimeout(typeLine1, 55 + Math.random() * 55);
+      state.deployTypeHandles.push(h);
+    } else {
+      // Pause, then move caret to line 2 and start typing it.
+      const h = setTimeout(() => {
+        if (state.phase !== 'deploying') return;
+        ideDeployLine2.appendChild(ideDeployCaret);
+        let j = 0;
+        function typeLine2() {
+          if (state.phase !== 'deploying') return;
+          if (j < DEPLOY_LINE_2.length) {
+            ideDeployLine2.insertBefore(document.createTextNode(DEPLOY_LINE_2[j]), ideDeployCaret);
+            if (settings.effects && DEPLOY_LINE_2[j] !== ' ') sfx.click();
+            j++;
+            const h2 = setTimeout(typeLine2, 55 + Math.random() * 55);
+            state.deployTypeHandles.push(h2);
+          }
+        }
+        typeLine2();
+      }, 600);
+      state.deployTypeHandles.push(h);
+    }
+  }
+  typeLine1();
+}
+
+function cancelDeployTyping() {
+  state.deployTypeHandles.forEach((h) => clearTimeout(h));
+  state.deployTypeHandles = [];
+  if (ideDeployLine1) ideDeployLine1.textContent = '';
+  if (ideDeployLine2) ideDeployLine2.textContent = '';
+}
+
+function startCloudCoinShowers() {
+  runCloudCoinShower();
+  const interval = setInterval(() => {
+    if (state.phase !== 'deploying') return;
+    runCloudCoinShower();
+  }, 4000);
+  state.cloudCoinHandles.push(interval);
+}
+
+function runCloudCoinShower() {
+  const clouds = document.querySelectorAll('.cloud');
+  clouds.forEach((cloud) => {
+    const rect = cloud.getBoundingClientRect();
+    const burstSize = 6 + Math.floor(Math.random() * 5); // 6–10 coins per cloud
+    for (let i = 0; i < burstSize; i++) {
+      const c = document.createElement('div');
+      c.className = 'coin';
+      c.style.left = (rect.left + Math.random() * rect.width) + 'px';
+      c.style.top = rect.bottom + 'px';
+      c.style.animationDuration = (1.6 + Math.random() * 1.4) + 's';
+      c.style.animationDelay = (Math.random() * 0.4) + 's';
+      c.style.width = c.style.height = (12 + Math.random() * 12) + 'px';
+      confetti.appendChild(c);
+    }
+  });
+  const cleanup = setTimeout(() => {
+    if (state.phase === 'deploying') confetti.innerHTML = '';
+  }, 3500);
+  state.cloudCoinHandles.push(cleanup);
+}
+
+function stopCloudCoinShowers() {
+  state.cloudCoinHandles.forEach((h) => { clearInterval(h); clearTimeout(h); });
+  state.cloudCoinHandles = [];
+  confetti.innerHTML = '';
 }
 
 function rainCoins() {
@@ -364,13 +524,11 @@ const sfx = {
     } catch (_) { /* autoplay blocked / hidden tab — ignore */ }
   },
   startSync() {
-    // Original 8-bit-style "go" fanfare: short ascending arpeggio + sustained tonic.
-    // Uses square waves to match the existing chiptune palette (sfx.alarm uses the same).
-    // Note choice is original — picked to feel like an arcade level-start, not to copy any specific game.
-    const arp = [392, 523, 659, 784]; // G4 C5 E5 G5 — open major triad climb
-    arp.forEach((f, i) => beep(f, 0.1, 'square', 0.09, i * 0.08));
-    beep(988, 0.18, 'square',   0.10, arp.length * 0.08);         // B5 accent
-    beep(784, 0.32, 'triangle', 0.08, arp.length * 0.08 + 0.12);  // G5 sustain pad
+    try {
+      startAudio.currentTime = 0;
+      const p = startAudio.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* autoplay blocked — ignore */ }
   },
 };
 
@@ -450,6 +608,103 @@ function hideTokenJoke() {
   state.tokenJokeShown = false;
   if (ideError) ideError.classList.add('hidden');
   if (ideCaret) ideCaret.style.display = '';
+}
+
+// ---------- RSI break joke ----------
+
+function scheduleRsiBreaks() {
+  cancelRsi();
+  const now = Date.now();
+  const windowEnd = state.endAt - 10 * 60 * 1000; // stop before sleeping phase
+  const windowMs = windowEnd - now;
+  if (windowMs <= 0) return;
+
+  const count = 10;
+  for (let i = 0; i < count; i++) {
+    const delay = Math.random() * windowMs;
+    const h = setTimeout(triggerRsiBreak, delay);
+    state.rsiHandles.push(h);
+  }
+}
+
+function triggerRsiBreak() {
+  if (state.phase !== 'running') return;
+  if (state.tokenJokeShown) return;
+  if (state.rsiActive) return;
+  const bossState = endboss.dataset.state;
+  if (bossState === 'sleeping' || bossState === 'defeated') return;
+
+  state.rsiActive = true;
+  stopIdeTyping();
+  ideRsi.classList.remove('hidden');
+  // Restart bar animation by cycling the class
+  const fill = ideRsi.querySelector('.ide-rsi-bar-fill');
+  fill.classList.remove('animating');
+  void fill.offsetWidth; // force reflow
+  fill.classList.add('animating');
+
+  const h = setTimeout(endRsiBreak, 60_000);
+  state.rsiHandles.push(h);
+}
+
+function endRsiBreak() {
+  ideRsi.classList.add('hidden');
+  state.rsiActive = false;
+  if (
+    state.phase === 'running' &&
+    !state.tokenJokeShown &&
+    endboss.dataset.state !== 'sleeping' &&
+    endboss.dataset.state !== 'defeated'
+  ) {
+    startIdeTyping();
+  }
+}
+
+function cancelRsi() {
+  state.rsiHandles.forEach((h) => clearTimeout(h));
+  state.rsiHandles = [];
+  state.rsiActive = false;
+  if (ideRsi) ideRsi.classList.add('hidden');
+}
+
+// ---------- Rain shower joke ----------
+
+function scheduleRainShowers() {
+  cancelRain();
+  const now = Date.now();
+  const windowMs = state.endAt - now;
+  if (windowMs <= 0) return;
+
+  const count = Math.floor(Math.random() * 4) + 2; // 2–5 showers per session
+  for (let i = 0; i < count; i++) {
+    const delay = Math.random() * windowMs;
+    const h = setTimeout(runRainShower, delay);
+    state.rainHandles.push(h);
+  }
+}
+
+function runRainShower() {
+  if (state.phase !== 'running') return;
+  const dropCount = 50 + Math.floor(Math.random() * 30);
+  for (let i = 0; i < dropCount; i++) {
+    const d = document.createElement('div');
+    d.className = 'raindrop';
+    d.style.left = Math.random() * 100 + 'vw';
+    d.style.animationDuration = (0.8 + Math.random() * 1.2) + 's';
+    d.style.animationDelay = (Math.random() * 1.5) + 's';
+    rainContainer.appendChild(d);
+  }
+  const h = setTimeout(() => {
+    // Remove only the drops from this shower to avoid clearing concurrent showers' leftovers
+    while (rainContainer.firstChild) rainContainer.removeChild(rainContainer.firstChild);
+  }, 4000);
+  state.rainHandles.push(h);
+}
+
+function cancelRain() {
+  state.rainHandles.forEach((h) => clearTimeout(h));
+  state.rainHandles = [];
+  if (rainContainer) rainContainer.innerHTML = '';
 }
 
 // ---------- Topi cameos ----------
@@ -629,6 +884,7 @@ function openSettings() {
   if (fastTopiToggle) fastTopiToggle.checked = settings.fastTopi;
   applyDevMode();
   updateStepperDisabled();
+  document.getElementById('appVersion').textContent = APP_VERSION;
   if (typeof settingsDialog.showModal === 'function') {
     settingsDialog.showModal();
   } else {
@@ -708,6 +964,35 @@ if (triggerTopiBtn) {
   });
 }
 
+if (triggerRsiBtn) {
+  triggerRsiBtn.addEventListener('click', () => {
+    closeSettings();
+    const h = setTimeout(() => { state.rsiActive = false; triggerRsiBreak(); }, 80);
+    state.rsiHandles.push(h);
+  });
+}
+
+if (triggerRainBtn) {
+  triggerRainBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(runRainShower, 80);
+  });
+}
+
+if (triggerFinishBtn) {
+  triggerFinishBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(() => {
+      // If idle, populate session state silently so finish() has something to wind down.
+      if (state.phase === 'idle' || state.phase === 'deploying') {
+        if (state.phase === 'deploying') exitDeployState();
+        startTimer({ silent: true });
+      }
+      finish();
+    }, 80);
+  });
+}
+
 if (fastTopiToggle) {
   fastTopiToggle.addEventListener('change', () => {
     settings.fastTopi = fastTopiToggle.checked;
@@ -721,10 +1006,89 @@ settingsDialog.addEventListener('close', () => {
   if (state.phase === 'idle') renderIdle();
 });
 
+// ---------- Clock mode + time picker ----------
+let clockMode = false;
+let tpHour = 14;
+let tpMin = 0;
+
+function updateStartLabel() {
+  const inner = startBtn.querySelector('.start-btn-inner') || startBtn;
+  inner.textContent = clockMode ? 'SET NEW TIME' : 'START SYNC';
+}
+
+if (clockBtn) {
+  clockBtn.addEventListener('click', () => {
+    clockMode = !clockMode;
+    clockBtn.setAttribute('aria-pressed', clockMode ? 'true' : 'false');
+    updateStartLabel();
+    if (settings.effects) sfx.click();
+  });
+}
+
+function openTimePicker() {
+  const now = new Date();
+  const m = Math.ceil((now.getMinutes() + 5) / 5) * 5;
+  tpHour = (now.getHours() + Math.floor(m / 60)) % 24;
+  tpMin  = m % 60;
+  renderTimePicker();
+  if (typeof timePickerDialog.showModal === 'function') {
+    timePickerDialog.showModal();
+  } else {
+    timePickerDialog.setAttribute('open', '');
+  }
+}
+
+function renderTimePicker() {
+  tpHourDisplay.textContent = String(tpHour).padStart(2, '0');
+  tpMinDisplay.textContent  = String(tpMin).padStart(2, '0');
+}
+
+tpStepperBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const [field, stepStr] = btn.dataset.tpStep.split(':');
+    const step = Number(stepStr);
+    if (field === 'hour') tpHour = (tpHour + step + 24) % 24;
+    else                  tpMin  = (tpMin  + step + 60) % 60;
+    renderTimePicker();
+    if (settings.effects) sfx.click();
+  });
+});
+
+if (tpOkBtn) {
+  tpOkBtn.addEventListener('click', () => {
+    const target = new Date();
+    target.setHours(tpHour, tpMin, 0, 0);
+    if (target.getTime() <= Date.now() + 1000) {
+      target.setDate(target.getDate() + 1);
+    }
+    const endAt = target.getTime();
+    const remainingMin = Math.max(1, Math.ceil((endAt - Date.now()) / 60000));
+    settings.durationMin = remainingMin;
+    clockMode = false;
+    clockBtn.setAttribute('aria-pressed', 'false');
+    updateStartLabel();
+    if (typeof timePickerDialog.close === 'function') timePickerDialog.close();
+    timePickerDialog.removeAttribute('open');
+    if (settings.effects) sfx.startSync();
+    startTimer({ endAt });
+  });
+}
+
+if (tpCancelBtn) {
+  tpCancelBtn.addEventListener('click', () => {
+    if (typeof timePickerDialog.close === 'function') timePickerDialog.close();
+    timePickerDialog.removeAttribute('open');
+  });
+}
+
 // ---------- Main button wiring ----------
 startBtn.addEventListener('click', () => {
   // Unlock audio on first interaction
   getAudioCtx();
+  if (clockMode) {
+    openTimePicker();
+    return;
+  }
   if (settings.effects) sfx.startSync();
   startTimer();
 });

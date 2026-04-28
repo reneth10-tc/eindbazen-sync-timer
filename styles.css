@@ -189,6 +189,12 @@ body {
 }
 .icon-btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000; }
 .icon-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(60%);
+}
+.icon-btn:disabled:hover { transform: none; box-shadow: var(--shadow); }
 .share-icon-btn { font-size: 18px; }
 
 /* ---------- Main panel ---------- */
@@ -896,6 +902,77 @@ body:has(.endboss.has-bug) .ide-bug-error {
   85%, 95% { opacity: 0.85; }
 }
 
+/* RSI break overlay — fills the IDE body, aqua background, white text + countdown bar. */
+.ide-rsi {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #00cccc;
+  z-index: 6;
+}
+.ide-rsi-text {
+  font-family: var(--pixel-font);
+  font-size: 7px;
+  color: #fff;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+}
+.ide-rsi-bar {
+  width: 70%;
+  height: 4px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ide-rsi-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: #fff;
+  transform-origin: left;
+}
+.ide-rsi-bar-fill.animating {
+  animation: rsiBarShrink 60s linear forwards;
+}
+@keyframes rsiBarShrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* Deploying overlay — fills the IDE body after finish-banner dismissed. */
+.ide-deploy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1ea83a;
+  z-index: 6;
+  text-align: center;
+}
+.ide-deploy-text {
+  font-family: var(--pixel-font);
+  font-size: 7px;
+  color: #fff;
+  line-height: 1.7;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+  text-align: left;
+  padding: 0 14px;
+  min-height: 38px;
+}
+.ide-deploy-line { white-space: pre-wrap; }
+.ide-deploy-warning { color: #ff9c2a; margin-top: 4px; }
+.ide-deploy-caret {
+  display: inline-block;
+  color: #fff;
+  margin-left: 1px;
+  animation: caretBlink 1s steps(2) infinite;
+}
+
 /* --- State: working --- */
 .endboss[data-state="working"] .laptop {
   opacity: 1;
@@ -944,6 +1021,17 @@ body:has(.endboss.has-bug) .ide-bug-error {
 /* --- State: defeated --- */
 .endboss[data-state="defeated"] {
   animation: bossDefeated 1.6s ease-in forwards;
+}
+/* Deploying — entered when the user dismisses the finish banner.
+   Forces the boss + laptop fully visible so the green deploy overlay is on screen. */
+.endboss[data-state="deploying"] {
+  animation: none;
+  transform: none;
+  opacity: 1;
+}
+.endboss[data-state="deploying"] .laptop {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 @keyframes bossDefeated {
   0%   { transform: translateY(0) rotate(0); opacity: 0.85; }
@@ -1006,7 +1094,7 @@ body:has(.endboss.has-bug) .ide-bug-error {
 .endboss[data-state="sleeping"] .boss-zzz { opacity: 1; }
 .endboss[data-state="sleeping"] .boss-eye { height: 6px; top: 100px; }
 .endboss[data-state="sleeping"] .pupil { display: none; }
-.endboss[data-state="sleeping"] .laptop { opacity: 0.5; }
+.endboss[data-state="sleeping"] .laptop { opacity: 1; }
 .endboss[data-state="sleeping"] .boss-arm--left,
 .endboss[data-state="sleeping"] .boss-arm--right {
   animation: none;
@@ -1092,6 +1180,29 @@ body:has(.endboss.has-bug) .ide-bug-error {
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
 }
 
+/* Rain shower (blue raindrops, triggered mid-session) */
+.rain-container {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+.raindrop {
+  position: absolute;
+  top: -20px;
+  width: 3px;
+  height: 14px;
+  background: linear-gradient(to bottom, #99ddff, #2266aa);
+  border-radius: 50% 50% 60% 60% / 30% 30% 70% 70%;
+  animation: rainFall linear forwards;
+  opacity: 0.85;
+}
+@keyframes rainFall {
+  0%   { transform: translateY(0); opacity: 0.85; }
+  100% { transform: translateY(110vh); opacity: 0.5; }
+}
+
 /* ============================================================
    Settings dialog
    ============================================================ */
@@ -1156,6 +1267,32 @@ body:has(.endboss.has-bug) .ide-bug-error {
 }
 .stepper-unit { font-size: 10px; opacity: 0.85; }
 
+/* Time picker — reuses .settings-dialog and .stepper-btn / .stepper-value */
+.time-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+.time-stepper {
+  flex-direction: column;
+  gap: 6px;
+}
+.time-stepper .stepper-value {
+  min-width: 0;
+}
+.time-colon {
+  font-family: var(--pixel-font);
+  font-size: 24px;
+  color: var(--coin-gold);
+  text-shadow: 2px 2px 0 #000;
+}
+.icon-btn[aria-pressed="true"] {
+  background: var(--coin-gold-dark);
+  box-shadow: inset 0 0 0 2px #fff, var(--shadow);
+}
+
 .toggle {
   flex-direction: row;
   align-items: center;
@@ -1183,6 +1320,13 @@ body:has(.endboss.has-bug) .ide-bug-error {
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+.settings-version {
+  text-align: center;
+  font-size: 8px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 4px;
+  letter-spacing: 1px;
 }
 
 /* ============================================================
