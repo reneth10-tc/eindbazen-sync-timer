@@ -1671,13 +1671,19 @@ body:has(.endboss.has-bug) .ide-bug-error {
   inset: 0;
   z-index: 50;
   pointer-events: none;
-  display: flex;
-  justify-content: center;
+  /* Stack all speech bubbles in the same cell so multiple variants
+     (bug, tea) overlap rather than sit side by side. */
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
   /* Push bubble up to roughly above the boss head.
      Endboss is 460px tall, anchored 96px from viewport bottom,
      so head top ≈ 100vh - 522px. Bubble sits ~50px above that. */
-  align-items: flex-end;
+  align-items: end;
   padding-bottom: 580px;
+}
+.bubble-layer > .speech-bubble {
+  grid-area: 1 / 1;
 }
 
 .speech-bubble {
@@ -1726,7 +1732,12 @@ body:has(.endboss.has-bug) .ide-bug-error {
   50%      { transform: rotate(-2deg); }
 }
 
-body:has(.endboss.has-bug) .speech-bubble {
+body:has(.endboss.has-bug) .speech-bubble--bug {
+  opacity: 1;
+  animation: bubbleWiggle 1.2s ease-in-out infinite;
+}
+
+.speech-bubble--tea.show {
   opacity: 1;
   animation: bubbleWiggle 1.2s ease-in-out infinite;
 }

@@ -4,7 +4,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -70,9 +70,11 @@ const devControls = $('devControls');
 const triggerTopiBtn = $('triggerTopiBtn');
 const triggerRsiBtn = $('triggerRsiBtn');
 const triggerRainBtn = $('triggerRainBtn');
+const triggerTeaBtn = $('triggerTeaBtn');
 const triggerFinishBtn = $('triggerFinishBtn');
 const fastTopiToggle = $('fastTopiToggle');
 const topiEl = document.querySelector('.topi');
+const speechBubbleTea = document.querySelector('.speech-bubble--tea');
 const ideTyping = $('ideTyping');
 const ideCaret = $('ideCaret');
 const ideError = $('ideError');
@@ -117,12 +119,16 @@ const state = {
   rainHandles: [],
   cloudCoinHandles: [],
   deployTypeHandles: [],
+  teaTimeHandle: null,
+  teaTimeHideHandle: null,
 };
 
 const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
 alarmAudio.preload = 'auto';
 const startAudio = new Audio('assets/sounds/sync-start.mp3');
 startAudio.preload = 'auto';
+const pipeAudio = new Audio('assets/sounds/pipe.mp3');
+pipeAudio.preload = 'auto';
 
 function startAlarmLoop() {
   if (!settings.alarm) return;
@@ -222,6 +228,7 @@ function startTimer({ endAt = null, silent = false } = {}) {
   scheduleTopiVisits();
   scheduleRsiBreaks();
   scheduleRainShowers();
+  scheduleTeaTime();
   scheduleTick();
 }
 
@@ -278,6 +285,7 @@ function resetTimer() {
   cancelTopi();
   cancelRsi();
   cancelRain();
+  cancelTeaTime();
   stopCloudCoinShowers();
   cancelDeployTyping();
   ideDeploy.classList.add('hidden');
@@ -311,6 +319,7 @@ function finish() {
   cancelTopi();
   cancelRsi();
   cancelRain();
+  cancelTeaTime();
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
@@ -530,6 +539,13 @@ const sfx = {
       if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch (_) { /* autoplay blocked — ignore */ }
   },
+  pipe() {
+    try {
+      pipeAudio.currentTime = 0;
+      const p = pipeAudio.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* autoplay blocked — ignore */ }
+  },
 };
 
 // ---------- IDE typing animation (runs while boss is at laptop) ----------
@@ -708,6 +724,40 @@ function cancelRain() {
   state.rainHandles.forEach((h) => clearTimeout(h));
   state.rainHandles = [];
   if (rainContainer) rainContainer.innerHTML = '';
+}
+
+// ---------- Tea time scene ----------
+// 5 minutes before the end, the boss declares "tea time!" — speech bubble for 1 min,
+// pipe chirp plays once. Other scenes (RSI, topi, rain) keep running underneath.
+const TEA_TIME_BEFORE_END_MS = 5 * 60 * 1000;
+const TEA_TIME_DURATION_MS = 60 * 1000;
+
+function scheduleTeaTime() {
+  cancelTeaTime();
+  const teaStart = state.endAt - TEA_TIME_BEFORE_END_MS;
+  const delay = teaStart - Date.now();
+  if (delay > 0) {
+    state.teaTimeHandle = setTimeout(() => showTeaTime(TEA_TIME_DURATION_MS), delay);
+  } else if (delay > -TEA_TIME_DURATION_MS) {
+    // Shared-link viewer joined mid-tea-time — show for the remaining slice.
+    showTeaTime(TEA_TIME_DURATION_MS + delay);
+  }
+}
+
+function showTeaTime(durationMs) {
+  if (state.phase !== 'running') return;
+  if (!speechBubbleTea) return;
+  speechBubbleTea.classList.add('show');
+  if (settings.effects) sfx.pipe();
+  state.teaTimeHideHandle = setTimeout(() => {
+    speechBubbleTea.classList.remove('show');
+  }, durationMs);
+}
+
+function cancelTeaTime() {
+  if (state.teaTimeHandle) { clearTimeout(state.teaTimeHandle); state.teaTimeHandle = null; }
+  if (state.teaTimeHideHandle) { clearTimeout(state.teaTimeHideHandle); state.teaTimeHideHandle = null; }
+  if (speechBubbleTea) speechBubbleTea.classList.remove('show');
 }
 
 // ---------- Topi cameos ----------
@@ -980,6 +1030,22 @@ if (triggerRainBtn) {
   triggerRainBtn.addEventListener('click', () => {
     closeSettings();
     setTimeout(runRainShower, 80);
+  });
+}
+
+if (triggerTeaBtn) {
+  triggerTeaBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(() => {
+      // Bypass the running-phase guard so the scene is previewable while idle.
+      cancelTeaTime();
+      if (!speechBubbleTea) return;
+      speechBubbleTea.classList.add('show');
+      if (settings.effects) sfx.pipe();
+      state.teaTimeHideHandle = setTimeout(() => {
+        speechBubbleTea.classList.remove('show');
+      }, TEA_TIME_DURATION_MS);
+    }, 80);
   });
 }
 
