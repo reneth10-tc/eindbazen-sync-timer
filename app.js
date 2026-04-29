@@ -636,6 +636,7 @@ function triggerRsiBreak() {
 
   state.rsiActive = true;
   stopIdeTyping();
+  endboss.classList.add('rsi-break');
   ideRsi.classList.remove('hidden');
   // Restart bar animation by cycling the class
   const fill = ideRsi.querySelector('.ide-rsi-bar-fill');
@@ -649,6 +650,7 @@ function triggerRsiBreak() {
 
 function endRsiBreak() {
   ideRsi.classList.add('hidden');
+  endboss.classList.remove('rsi-break');
   state.rsiActive = false;
   if (
     state.phase === 'running' &&
@@ -664,6 +666,7 @@ function cancelRsi() {
   state.rsiHandles.forEach((h) => clearTimeout(h));
   state.rsiHandles = [];
   state.rsiActive = false;
+  endboss.classList.remove('rsi-break');
   if (ideRsi) ideRsi.classList.add('hidden');
 }
 

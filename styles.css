@@ -1100,6 +1100,13 @@ body:has(.endboss.has-bug) .ide-bug-error {
   animation: none;
   transform: rotate(-10deg);
 }
+
+/* Pause arm typing animation during RSI break */
+.endboss.rsi-break .boss-arm--left,
+.endboss.rsi-break .boss-arm--right {
+  animation: none;
+  transform: rotate(-10deg);
+}
 .endboss[data-state="sleeping"] {
   animation: bossSleep 5s ease-in-out infinite;
 }
