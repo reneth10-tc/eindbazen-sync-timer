@@ -4,7 +4,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -820,7 +820,8 @@ function parseSharedSession() {
   const e = Number(params.get('e'));
   const d = Number(params.get('d'));
   if (!e || !d) return null;
-  if (d < DURATION_MIN || d > DURATION_MAX || d % DURATION_STEP !== 0) return null;
+  // Allow any positive integer up to 24h — time-picker sessions aren't bound to 30-min steps.
+  if (!Number.isInteger(d) || d < 1 || d > 1440) return null;
   return { endAt: e, durationMin: d };
 }
 
