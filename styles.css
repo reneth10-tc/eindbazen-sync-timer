@@ -355,6 +355,8 @@ body {
 }
 .mini-btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000; }
 .mini-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.mini-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(60%); }
+.mini-btn:disabled:hover { transform: none; box-shadow: 4px 4px 0 #000; }
 
 .hidden { display: none !important; }
 
@@ -965,7 +967,34 @@ body:has(.endboss.has-bug) .ide-bug-error {
   min-height: 38px;
 }
 .ide-deploy-line { white-space: pre-wrap; }
-.ide-deploy-warning { color: #ff9c2a; margin-top: 4px; }
+.ide-deploy-warning { color: #ff9c2a; margin-top: 6px; }
+.ide-deploy-success {
+  color: #0c3d0c;
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.55);
+  margin-top: 6px;
+}
+.ide-deploy-bar {
+  width: 80%;
+  height: 4px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.ide-deploy-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: #fff;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.ide-deploy-bar-fill.animating {
+  animation: deployBarGrow 5s linear forwards;
+}
+@keyframes deployBarGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
 .ide-deploy-caret {
   display: inline-block;
   color: #fff;

@@ -4,7 +4,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.4';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -83,12 +83,16 @@ const dismissFinishBtn = $('dismissFinishBtn');
 const slackArea = $('slackArea');
 const slackBtn = $('slackBtn');
 const slackStatus = $('slackStatus');
+const slackShareArea = $('slackShareArea');
+const slackShareBtn = $('slackShareBtn');
+const slackShareStatus = $('slackShareStatus');
 const confetti = $('confetti');
 const rainContainer = $('rainContainer');
 const ideRsi = $('ideRsi');
 const ideDeploy = $('ideDeploy');
 const ideDeployLine1 = $('ideDeployLine1');
 const ideDeployLine2 = $('ideDeployLine2');
+const ideDeployBar = $('ideDeployBar');
 const ideDeployCaret = $('ideDeployCaret');
 const endTimeDisplay = $('endTimeDisplay');
 const endTimeValue = $('endTimeValue');
@@ -197,6 +201,12 @@ function startTimer({ endAt = null, silent = false } = {}) {
   shareBtn.disabled = false;
   shareBtn.textContent = '🔗';
   pauseBtn.textContent = 'Pause';
+  if (settings.slackMode !== 'off') {
+    slackShareArea.classList.remove('hidden');
+    slackShareBtn.disabled = false;
+    slackShareStatus.textContent = '';
+    slackShareStatus.classList.remove('err');
+  }
   startBtn.disabled = true;
 
   if (!silent) {
@@ -292,6 +302,7 @@ function resetTimer() {
   setPhase('idle');
   state.halfwayFired = false;
   runControls.classList.add('hidden');
+  slackShareArea.classList.add('hidden');
   shareBtn.disabled = true;
   shareBtn.textContent = '🔗';
   endTimeDisplay.classList.add('hidden');
@@ -323,6 +334,7 @@ function finish() {
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
+  slackShareArea.classList.add('hidden');
   shareBtn.disabled = true;
   startBtn.disabled = false;
 
@@ -383,6 +395,11 @@ function exitDeployState() {
 
 const DEPLOY_LINE_1 = 'deploying component, fingers crossed';
 const DEPLOY_LINE_2 = "don't hit the tester in case of a system failure";
+const DEPLOY_LINE_3 = 'Akurro Mortgages Deedpassing status OK';
+
+const DEPLOY_BAR_MS = 5000;
+const DEPLOY_HOLD_MS = 20_000;
+const DEPLOY_ERASE_MS = 30;
 
 function typeDeployText() {
   cancelDeployTyping();
@@ -402,9 +419,19 @@ function typeDeployText() {
       const h = setTimeout(typeLine1, 55 + Math.random() * 55);
       state.deployTypeHandles.push(h);
     } else {
-      // Pause, then move caret to line 2 and start typing it.
+      // Line 1 done — hide caret, show progress bar filling 0→100%.
+      ideDeployCaret.style.display = 'none';
+      if (ideDeployBar) {
+        ideDeployBar.classList.remove('hidden');
+        const fill = ideDeployBar.querySelector('.ide-deploy-bar-fill');
+        fill.classList.remove('animating');
+        void fill.offsetWidth; // force reflow so animation restarts cleanly
+        fill.classList.add('animating');
+      }
+      // After bar completes, type line 2.
       const h = setTimeout(() => {
         if (state.phase !== 'deploying') return;
+        ideDeployCaret.style.display = '';
         ideDeployLine2.appendChild(ideDeployCaret);
         let j = 0;
         function typeLine2() {
@@ -415,21 +442,69 @@ function typeDeployText() {
             j++;
             const h2 = setTimeout(typeLine2, 55 + Math.random() * 55);
             state.deployTypeHandles.push(h2);
+          } else {
+            // Hold, erase line 2, then type line 3 on the same element.
+            const hold = setTimeout(() => {
+              if (state.phase !== 'deploying') return;
+              eraseDeployLine2(typeLine3);
+            }, DEPLOY_HOLD_MS);
+            state.deployTypeHandles.push(hold);
           }
         }
         typeLine2();
-      }, 600);
+      }, DEPLOY_BAR_MS);
       state.deployTypeHandles.push(h);
     }
   }
+
+  function typeLine3() {
+    if (state.phase !== 'deploying') return;
+    ideDeployLine2.classList.remove('ide-deploy-warning');
+    ideDeployLine2.classList.add('ide-deploy-success');
+    let k = 0;
+    function step() {
+      if (state.phase !== 'deploying') return;
+      if (k < DEPLOY_LINE_3.length) {
+        ideDeployLine2.insertBefore(document.createTextNode(DEPLOY_LINE_3[k]), ideDeployCaret);
+        if (settings.effects && DEPLOY_LINE_3[k] !== ' ') sfx.click();
+        k++;
+        const h = setTimeout(step, 55 + Math.random() * 55);
+        state.deployTypeHandles.push(h);
+      }
+    }
+    step();
+  }
+
   typeLine1();
+}
+
+function eraseDeployLine2(onDone) {
+  if (state.phase !== 'deploying') return;
+  const prev = ideDeployCaret.previousSibling;
+  if (!prev) { onDone(); return; }
+  if (prev.nodeType === Node.TEXT_NODE && prev.textContent.length > 1) {
+    prev.textContent = prev.textContent.slice(0, -1);
+  } else {
+    prev.remove();
+  }
+  const h = setTimeout(() => eraseDeployLine2(onDone), DEPLOY_ERASE_MS);
+  state.deployTypeHandles.push(h);
 }
 
 function cancelDeployTyping() {
   state.deployTypeHandles.forEach((h) => clearTimeout(h));
   state.deployTypeHandles = [];
   if (ideDeployLine1) ideDeployLine1.textContent = '';
-  if (ideDeployLine2) ideDeployLine2.textContent = '';
+  if (ideDeployLine2) {
+    ideDeployLine2.textContent = '';
+    ideDeployLine2.classList.remove('ide-deploy-success');
+    ideDeployLine2.classList.add('ide-deploy-warning');
+  }
+  if (ideDeployBar) {
+    ideDeployBar.classList.add('hidden');
+    const fill = ideDeployBar.querySelector('.ide-deploy-bar-fill');
+    if (fill) fill.classList.remove('animating');
+  }
 }
 
 function startCloudCoinShowers() {
@@ -909,7 +984,7 @@ async function sendSlack() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `:alarm_clock: *Eindbazen sync check-in time!* (${settings.durationMin} min)`,
+        message: `:alarm_clock: *Hey Eindbazen! It's sync time!* (${settings.durationMin} min)`,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -924,6 +999,33 @@ async function sendSlack() {
       slackStatus.classList.add('err');
       slackBtn.disabled = false;
     }
+  }
+}
+
+async function sendSlackStart() {
+  slackShareBtn.disabled = true;
+  slackShareStatus.textContent = 'Sending…';
+  slackShareStatus.classList.remove('err');
+  const url = new URL(window.location.href);
+  url.hash = `e=${state.endAt}&d=${settings.durationMin}`;
+  const endTime = formatEndTime(state.endAt);
+  try {
+    const res = await fetch('/.netlify/functions/slack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `:alarm_clock: *Sync started!* ${settings.durationMin} min — ends at ${endTime}\n${url.toString()}`,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    slackShareStatus.textContent = data.stubbed ? 'Sent (stub mode)' : 'Sent!';
+    setTimeout(() => { slackShareStatus.textContent = ''; }, 10_000);
+  } catch (err) {
+    console.error('Slack start send failed', err);
+    slackShareStatus.textContent = 'Failed: ' + err.message;
+    slackShareStatus.classList.add('err');
+    slackShareBtn.disabled = false;
   }
 }
 
@@ -1167,6 +1269,7 @@ resetBtn.addEventListener('click', resetTimer);
 shareBtn.addEventListener('click', copyShareLink);
 dismissFinishBtn.addEventListener('click', hideFinishBanner);
 slackBtn.addEventListener('click', sendSlack);
+slackShareBtn.addEventListener('click', sendSlackStart);
 
 // ---------- Keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {

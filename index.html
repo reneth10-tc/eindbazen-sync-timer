@@ -128,6 +128,9 @@
                 <div id="ideDeploy" class="ide-deploy hidden" aria-hidden="true">
                   <div class="ide-deploy-text">
                     <div class="ide-deploy-line" id="ideDeployLine1"></div>
+                    <div id="ideDeployBar" class="ide-deploy-bar hidden">
+                      <div class="ide-deploy-bar-fill"></div>
+                    </div>
                     <div class="ide-deploy-line ide-deploy-warning" id="ideDeployLine2"></div>
                     <span id="ideDeployCaret" class="ide-deploy-caret">&#9608;</span>
                   </div>
@@ -207,6 +210,10 @@
     <div id="runControls" class="run-controls hidden">
       <button id="pauseBtn" class="mini-btn" type="button">Pause</button>
       <button id="resetBtn" class="mini-btn" type="button">Reset</button>
+      <div id="slackShareArea" class="slack-area hidden">
+        <button id="slackShareBtn" class="mini-btn slack-btn" type="button">Share on Slack</button>
+        <span id="slackShareStatus" class="slack-status"></span>
+      </div>
     </div>
   </main>
 

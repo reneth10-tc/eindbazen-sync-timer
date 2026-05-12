@@ -42,7 +42,7 @@ export default async (req) => {
     const slackRes = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: message }),
+      body: JSON.stringify({ message }),
     });
     if (!slackRes.ok) {
       const text = await slackRes.text();

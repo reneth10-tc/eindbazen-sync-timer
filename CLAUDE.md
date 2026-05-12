@@ -45,6 +45,8 @@ The timer ticks on a **250ms interval** (not 1000ms) and uses `Math.ceil()` for 
 
 **RSI break** overlays a progress bar in the IDE at random points (10 scheduled per session, within the non-sleeping window); each break lasts 60 seconds.
 
+**Tea time** fires at exactly 5 minutes before `endAt`: shows a speech bubble (`.speech-bubble--tea`) on the endboss for 60 seconds and plays `pipe.mp3` once. Shared-link viewers who join mid-tea-time see only the remaining slice.
+
 **Rain showers** (2–5 per session): drops blue `<div class="raindrop">` elements into `#rainContainer` at random intervals throughout the session.
 
 **Topi cameos**: a CSS chameleon (`.topi`) walks in from the left, climbs on the laptop for 5 s (triggering a `has-bug` / `angry` state on the endboss), then exits right. Happens 5 times per session at evenly-spaced random offsets. Scheduling uses a deterministic PRNG (`mulberry32`) seeded from `Math.floor(endAt / 1000)` — shared-link viewers see topi at the same wall-clock moments.
@@ -76,7 +78,7 @@ The browser POSTs to `/.netlify/functions/slack` — never directly to Slack —
 
 ### Pure CSS pixel art (`index.html` + `styles.css`)
 
-The Endboss and Topi the chameleon are built entirely from styled `<div>` elements — no image assets. Most sounds are synthesized at runtime via Web Audio API square/sawtooth oscillators. The finish alarm (`assets/sounds/level-complete.mp3`) and start sound (`assets/sounds/sync-start.mp3`) are real MP3 files — to swap them, replace the files or update the `new Audio(...)` paths at the top of `app.js`.
+The Endboss and Topi the chameleon are built entirely from styled `<div>` elements — no image assets. Most sounds are synthesized at runtime via Web Audio API square/sawtooth oscillators. Three real MP3 files live in `assets/sounds/`: `level-complete.mp3` (finish alarm, loops until banner dismissed), `sync-start.mp3` (start fanfare), and `pipe.mp3` (tea time). To swap them, replace the files or update the `new Audio(...)` paths at the top of `app.js`.
 
 ### Background tab resilience
 
