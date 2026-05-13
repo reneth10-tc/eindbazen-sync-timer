@@ -71,10 +71,12 @@ const triggerTopiBtn = $('triggerTopiBtn');
 const triggerRsiBtn = $('triggerRsiBtn');
 const triggerRainBtn = $('triggerRainBtn');
 const triggerTeaBtn = $('triggerTeaBtn');
+const triggerHydrateBtn = $('triggerHydrateBtn');
 const triggerFinishBtn = $('triggerFinishBtn');
 const fastTopiToggle = $('fastTopiToggle');
 const topiEl = document.querySelector('.topi');
 const speechBubbleTea = document.querySelector('.speech-bubble--tea');
+const speechBubbleHydrate = document.querySelector('.speech-bubble--hydrate');
 const ideTyping = $('ideTyping');
 const ideCaret = $('ideCaret');
 const ideError = $('ideError');
@@ -112,6 +114,9 @@ const state = {
   remainingMs: 0,   // used while paused
   totalMs: 0,       // for halfway detection
   halfwayFired: false,
+  preFinishSlackFired: false,
+  fromSharedLink: false,
+  hydrateHideHandle: null,
   tickHandle: null,
   tokenJokeHandle: null,
   tokenJokeShown: false,
@@ -133,6 +138,8 @@ const startAudio = new Audio('assets/sounds/sync-start.mp3');
 startAudio.preload = 'auto';
 const pipeAudio = new Audio('assets/sounds/pipe.mp3');
 pipeAudio.preload = 'auto';
+const waterAudio = new Audio('assets/sounds/water.mp3');
+waterAudio.preload = 'auto';
 
 function startAlarmLoop() {
   if (!settings.alarm) return;
@@ -186,6 +193,7 @@ function renderTime(ms) {
 
 function startTimer({ endAt = null, silent = false } = {}) {
   if (state.phase === 'deploying') exitDeployState();
+  state.fromSharedLink = silent;
   const totalMs = settings.durationMin * 60 * 1000;
   const FIVE_MIN_MS = 5 * 60 * 1000;
   const startAt = settings.roundStart
@@ -193,6 +201,7 @@ function startTimer({ endAt = null, silent = false } = {}) {
     : Date.now();
   state.totalMs = totalMs;
   state.halfwayFired = false;
+  state.preFinishSlackFired = false;
   state.endAt = endAt ?? startAt + totalMs;
   endTimeValue.textContent = formatEndTime(state.endAt);
   endTimeDisplay.classList.remove('hidden');
@@ -201,13 +210,16 @@ function startTimer({ endAt = null, silent = false } = {}) {
   shareBtn.disabled = false;
   shareBtn.textContent = '🔗';
   pauseBtn.textContent = 'Pause';
-  if (settings.slackMode !== 'off') {
+  if (settings.slackMode !== 'off' && !state.fromSharedLink) {
     slackShareArea.classList.remove('hidden');
     slackShareBtn.disabled = false;
     slackShareStatus.textContent = '';
     slackShareStatus.classList.remove('err');
+  } else {
+    slackShareArea.classList.add('hidden');
   }
   startBtn.disabled = true;
+  startBtn.classList.add('hidden');
 
   if (!silent) {
     startBtn.classList.add('flash');
@@ -256,6 +268,12 @@ function tick() {
   if (!state.halfwayFired && remaining <= state.totalMs / 2) {
     state.halfwayFired = true;
     endboss.dataset.state = 'tired';
+    showHydrate(HYDRATE_DURATION_MS);
+  }
+
+  if (!state.preFinishSlackFired && remaining <= 60_000 && remaining > 0) {
+    state.preFinishSlackFired = true;
+    if (settings.slackMode === 'auto' && !state.fromSharedLink) sendSlack();
   }
 
   if (remaining <= 10 * 60 * 1000 && remaining > 10 * 1000 && endboss.dataset.state !== 'sleeping') {
@@ -296,17 +314,20 @@ function resetTimer() {
   cancelRsi();
   cancelRain();
   cancelTeaTime();
+  cancelHydrate();
   stopCloudCoinShowers();
   cancelDeployTyping();
   ideDeploy.classList.add('hidden');
   setPhase('idle');
   state.halfwayFired = false;
+  state.preFinishSlackFired = false;
   runControls.classList.add('hidden');
   slackShareArea.classList.add('hidden');
   shareBtn.disabled = true;
   shareBtn.textContent = '🔗';
   endTimeDisplay.classList.add('hidden');
   startBtn.disabled = false;
+  startBtn.classList.remove('hidden');
   endboss.dataset.state = 'idle';
   endboss.classList.remove('stressed', 'roar');
   stopIdeTyping();
@@ -331,12 +352,14 @@ function finish() {
   cancelRsi();
   cancelRain();
   cancelTeaTime();
+  cancelHydrate();
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
   slackShareArea.classList.add('hidden');
   shareBtn.disabled = true;
   startBtn.disabled = false;
+  startBtn.classList.remove('hidden');
 
   endboss.dataset.state = 'defeated';
   endboss.classList.remove('stressed');
@@ -347,10 +370,6 @@ function finish() {
 
   showFinishBanner();
   rainCoins();
-
-  if (settings.slackMode === 'auto') {
-    sendSlack();
-  }
 }
 
 function showFinishBanner() {
@@ -621,20 +640,115 @@ const sfx = {
       if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch (_) { /* autoplay blocked — ignore */ }
   },
+  gulp() {
+    try {
+      waterAudio.currentTime = 0;
+      const p = waterAudio.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* autoplay blocked — ignore */ }
+  },
 };
 
 // ---------- IDE typing animation (runs while boss is at laptop) ----------
 const IDE_PROMPTS = [
   'build NewCorp ECH thingy',
-  'refactor sprint backlog',
   'generate status report',
-  'explain why retro ran long',
-  'estimate remaining tickets',
-  'summarize blockers for Slack',
-  'auto-assign review rotations',
+  'create easy daily goals for me',
+  'please fix my merge conflicts',
+  'rebase onto main, what could go wrong',
+  'apologise to the linter',
+  'rename variables until it compiles',
+  'add TODO: refactor later',
+  'build this story on auto-pilot',
+  'set reminder to buy bitterballs',
+  'rollback last deploy quietly',
+  'cancel all my meetings',
+  'silence failing test for now',
+  'git blame someone else',
 ];
 let ideTypingHandle = null;
+let ideThinkingDotHandle = null;
+let ideThinkingDoneHandle = null;
 let ideTypingActive = false;
+
+const IDE_MAX_HISTORY_LINES = 4;
+let ideLineCounter = 5; // initial hardcoded lines go up to 5
+const THINKING_VERBS = [
+  'Thinking', 'Pondering', 'Analyzing', 'Exploring', 'Considering',
+  'Reasoning', 'Reflecting', 'Investigating', 'Crunching', 'Brewing',
+];
+const THINKING_SYMBOLS = ['✻', '✱', '✳']; // ✻ ✱ ✳
+
+function getActiveIdeLine() {
+  return ideTyping ? ideTyping.closest('.ide-line--active') : null;
+}
+
+function trimIdeHistory() {
+  const active = getActiveIdeLine();
+  if (!active) return;
+  const body = active.parentNode;
+  const history = Array.from(body.querySelectorAll('.ide-line:not(.ide-line--active)'));
+  while (history.length > IDE_MAX_HISTORY_LINES) {
+    history.shift().remove();
+  }
+}
+
+function appendIdeHistoryLine({ prompt = false, userText = '', ghostText = '' } = {}) {
+  const active = getActiveIdeLine();
+  if (!active) return null;
+  ideLineCounter += 1;
+  const line = document.createElement('div');
+  line.className = 'ide-line';
+  const lineno = document.createElement('span');
+  lineno.className = 'ide-lineno';
+  lineno.textContent = String(ideLineCounter);
+  line.appendChild(lineno);
+  if (prompt) {
+    const promptSpan = document.createElement('span');
+    promptSpan.className = 'ide-prompt';
+    promptSpan.textContent = '>';
+    line.appendChild(promptSpan);
+    line.appendChild(document.createTextNode(' '));
+    const userSpan = document.createElement('span');
+    userSpan.className = 'ide-user';
+    userSpan.textContent = userText;
+    line.appendChild(userSpan);
+  } else {
+    const ghostSpan = document.createElement('span');
+    ghostSpan.className = 'ide-ghost';
+    ghostSpan.textContent = ghostText;
+    line.appendChild(ghostSpan);
+  }
+  active.parentNode.insertBefore(line, active);
+  const activeNo = active.querySelector('.ide-lineno');
+  if (activeNo) activeNo.textContent = String(ideLineCounter + 1);
+  trimIdeHistory();
+  return line;
+}
+
+function startIdeThinking(onDone) {
+  const verb = THINKING_VERBS[Math.floor(Math.random() * THINKING_VERBS.length)];
+  const symbol = THINKING_SYMBOLS[Math.floor(Math.random() * THINKING_SYMBOLS.length)];
+  const baseText = `  ${symbol} ${verb}`;
+  const line = appendIdeHistoryLine({ ghostText: baseText });
+  if (!line) { onDone(); return; }
+  const ghostSpan = line.querySelector('.ide-ghost');
+  let dots = 0;
+  function step() {
+    if (!ideTypingActive) return;
+    dots = (dots + 1) % 4;
+    ghostSpan.textContent = baseText + '.'.repeat(dots);
+    ideThinkingDotHandle = setTimeout(step, 350);
+  }
+  step();
+  const duration = 2500 + Math.random() * 4500;
+  ideThinkingDoneHandle = setTimeout(() => {
+    if (ideThinkingDotHandle) { clearTimeout(ideThinkingDotHandle); ideThinkingDotHandle = null; }
+    if (!ideTypingActive) return;
+    ghostSpan.textContent = baseText + '...';
+    onDone();
+  }, duration);
+}
 
 function ideTypeLoop() {
   if (!ideTypingActive || !ideTyping) return;
@@ -648,17 +762,17 @@ function ideTypeLoop() {
       i++;
       ideTypingHandle = setTimeout(typeChar, 60 + Math.random() * 60);
     } else {
-      // pause, then erase, then next prompt
-      ideTypingHandle = setTimeout(() => eraseLoop(text.length), 900);
-    }
-  }
-  function eraseLoop(remaining) {
-    if (!ideTypingActive) return;
-    if (remaining > 0) {
-      ideTyping.textContent = ideTyping.textContent.slice(0, remaining - 1);
-      ideTypingHandle = setTimeout(() => eraseLoop(remaining - 1), 30);
-    } else {
-      ideTypingHandle = setTimeout(ideTypeLoop, 400);
+      // Pause on the finished prompt, then move it to history, run a
+      // Claude Code-style thinking animation, then start the next prompt.
+      ideTypingHandle = setTimeout(() => {
+        if (!ideTypingActive) return;
+        appendIdeHistoryLine({ prompt: true, userText: text });
+        ideTyping.textContent = '';
+        startIdeThinking(() => {
+          if (!ideTypingActive) return;
+          ideTypingHandle = setTimeout(ideTypeLoop, 350);
+        });
+      }, 700);
     }
   }
   typeChar();
@@ -672,6 +786,8 @@ function startIdeTyping() {
 function stopIdeTyping() {
   ideTypingActive = false;
   if (ideTypingHandle) { clearTimeout(ideTypingHandle); ideTypingHandle = null; }
+  if (ideThinkingDotHandle) { clearTimeout(ideThinkingDotHandle); ideThinkingDotHandle = null; }
+  if (ideThinkingDoneHandle) { clearTimeout(ideThinkingDoneHandle); ideThinkingDoneHandle = null; }
   if (ideTyping) ideTyping.textContent = '';
 }
 
@@ -680,6 +796,8 @@ function showTokenJoke() {
   state.tokenJokeShown = true;
   ideTypingActive = false;
   if (ideTypingHandle) { clearTimeout(ideTypingHandle); ideTypingHandle = null; }
+  if (ideThinkingDotHandle) { clearTimeout(ideThinkingDotHandle); ideThinkingDotHandle = null; }
+  if (ideThinkingDoneHandle) { clearTimeout(ideThinkingDoneHandle); ideThinkingDoneHandle = null; }
   if (ideTyping) ideTyping.textContent = 'build NewCorp ECH thi';
   if (ideCaret) ideCaret.style.display = 'none';
   if (ideError) ideError.classList.remove('hidden');
@@ -835,6 +953,26 @@ function cancelTeaTime() {
   if (speechBubbleTea) speechBubbleTea.classList.remove('show');
 }
 
+// ---------- Hydration nudge ----------
+// At halfway, the boss reminds the team to drink water.
+const HYDRATE_DURATION_MS = 8 * 1000;
+
+function showHydrate(durationMs) {
+  if (state.phase !== 'running') return;
+  if (!speechBubbleHydrate) return;
+  if (state.hydrateHideHandle) { clearTimeout(state.hydrateHideHandle); state.hydrateHideHandle = null; }
+  speechBubbleHydrate.classList.add('show');
+  if (settings.effects) sfx.gulp();
+  state.hydrateHideHandle = setTimeout(() => {
+    speechBubbleHydrate.classList.remove('show');
+  }, durationMs);
+}
+
+function cancelHydrate() {
+  if (state.hydrateHideHandle) { clearTimeout(state.hydrateHideHandle); state.hydrateHideHandle = null; }
+  if (speechBubbleHydrate) speechBubbleHydrate.classList.remove('show');
+}
+
 // ---------- Topi cameos ----------
 // Deterministic PRNG (mulberry32) seeded from endAt so shared-link viewers
 // see topi at identical wall-clock moments.
@@ -984,7 +1122,7 @@ async function sendSlack() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `:alarm_clock: *Hey Eindbazen! It's sync time!* (${settings.durationMin} min)`,
+        message: `:alarm_clock: *Hey Eindbazen! Sync time in 1 minute!* (${settings.durationMin} min)`,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -1014,7 +1152,7 @@ async function sendSlackStart() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `:alarm_clock: *Sync started!* ${settings.durationMin} min — ends at ${endTime}\n${url.toString()}`,
+        message: `:hourglass_flowing_sand: Een nieuw focus-block is gestart. ${settings.durationMin} min — ends at ${endTime}\n${url.toString()}`,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -1147,6 +1285,21 @@ if (triggerTeaBtn) {
       state.teaTimeHideHandle = setTimeout(() => {
         speechBubbleTea.classList.remove('show');
       }, TEA_TIME_DURATION_MS);
+    }, 80);
+  });
+}
+
+if (triggerHydrateBtn) {
+  triggerHydrateBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(() => {
+      cancelHydrate();
+      if (!speechBubbleHydrate) return;
+      speechBubbleHydrate.classList.add('show');
+      if (settings.effects) sfx.gulp();
+      state.hydrateHideHandle = setTimeout(() => {
+        speechBubbleHydrate.classList.remove('show');
+      }, HYDRATE_DURATION_MS);
     }, 80);
   });
 }

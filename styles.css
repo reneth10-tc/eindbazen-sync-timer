@@ -337,8 +337,12 @@ body {
 }
 
 .run-controls {
+  position: relative;
+  z-index: 6;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .mini-btn {
@@ -1771,6 +1775,11 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
   animation: bubbleWiggle 1.2s ease-in-out infinite;
 }
 
+.speech-bubble--hydrate.show {
+  opacity: 1;
+  animation: bubbleWiggle 1.2s ease-in-out infinite;
+}
+
 /* Mobile: boss is scaled to ~0.62, so head sits much lower — adjust offset */
 @media (max-width: 640px) {
   .bubble-layer { padding-bottom: 360px; }
@@ -1839,6 +1848,11 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
 /* ============================================================
    Mobile-ish responsive (desktop-first, but don't be broken)
    ============================================================ */
+@media (max-width: 1100px) and (min-width: 641px) {
+  .endboss { transform: scale(0.78); transform-origin: bottom; }
+  .panel { gap: 20px; }
+  .bubble-layer { padding-bottom: 470px; }
+}
 @media (max-width: 640px) {
   .endboss { width: 380px; height: 320px; transform: scale(0.62); transform-origin: bottom; }
   .timer { padding: 20px 28px; gap: 10px; }
