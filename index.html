@@ -18,6 +18,33 @@
     <span class="cloud cloud--3"></span>
   </div>
 
+  <!-- Mario-style castle on the far horizon -->
+  <div class="castle" aria-hidden="true">
+    <div class="castle-hill"></div>
+    <div class="castle-back-tower">
+      <div class="castle-back-tower-top"></div>
+      <div class="castle-back-tower-body"></div>
+    </div>
+    <div class="castle-keep">
+      <div class="castle-pole">
+        <div class="castle-flag"><span class="castle-flag-letter">R</span></div>
+      </div>
+      <div class="castle-keep-top"></div>
+      <div class="castle-keep-body">
+        <span class="castle-window"></span>
+        <span class="castle-window"></span>
+      </div>
+    </div>
+    <div class="castle-base">
+      <div class="castle-base-top"></div>
+      <div class="castle-base-body">
+        <div class="castle-door"></div>
+        <span class="castle-window castle-window--base"></span>
+        <span class="castle-window castle-window--base"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- Endboss scene (behind everything interactive) -->
   <div class="stage" aria-hidden="true">
     <div class="endboss" data-state="idle">
@@ -176,6 +203,50 @@
     </div>
   </div>
 
+  <!-- Mario-style pipes on the ground -->
+  <div id="pipeLeft" class="pipe pipe--left" aria-hidden="true">
+    <div class="pipe-character">
+      <div class="pipe-char-hair"></div>
+      <div class="pipe-char-head">
+        <div class="pipe-char-glasses"></div>
+        <div class="pipe-char-brow pipe-char-brow--l"></div>
+        <div class="pipe-char-brow pipe-char-brow--r"></div>
+        <div class="pipe-char-eye pipe-char-eye--l"></div>
+        <div class="pipe-char-eye pipe-char-eye--r"></div>
+        <div class="pipe-char-mouth"></div>
+      </div>
+      <div class="pipe-char-body">
+        <span class="pipe-char-arm pipe-char-arm--l"></span>
+        <span class="pipe-char-arm pipe-char-arm--r"></span>
+        <span class="pipe-char-name"></span>
+      </div>
+    </div>
+    <div class="pipe-rim"></div>
+    <div class="pipe-shaft"></div>
+    <div class="pipe-bubble"><span class="pipe-bubble-text"></span></div>
+  </div>
+  <div id="pipeRight" class="pipe pipe--right" aria-hidden="true">
+    <div class="pipe-character">
+      <div class="pipe-char-hair"></div>
+      <div class="pipe-char-head">
+        <div class="pipe-char-glasses"></div>
+        <div class="pipe-char-brow pipe-char-brow--l"></div>
+        <div class="pipe-char-brow pipe-char-brow--r"></div>
+        <div class="pipe-char-eye pipe-char-eye--l"></div>
+        <div class="pipe-char-eye pipe-char-eye--r"></div>
+        <div class="pipe-char-mouth"></div>
+      </div>
+      <div class="pipe-char-body">
+        <span class="pipe-char-arm pipe-char-arm--l"></span>
+        <span class="pipe-char-arm pipe-char-arm--r"></span>
+        <span class="pipe-char-name"></span>
+      </div>
+    </div>
+    <div class="pipe-rim"></div>
+    <div class="pipe-shaft"></div>
+    <div class="pipe-bubble"><span class="pipe-bubble-text"></span></div>
+  </div>
+
   <!-- Ground bricks -->
   <div class="ground" aria-hidden="true"></div>
 
@@ -267,6 +338,11 @@
       </label>
 
       <label class="field toggle">
+        <input type="checkbox" id="pipeSoundsToggle" />
+        <span>Pipe sounds</span>
+      </label>
+
+      <label class="field toggle">
         <input type="checkbox" id="roundStartToggle" />
         <span>Round start to next 5 min</span>
       </label>
@@ -293,6 +369,7 @@
           <button type="button" id="triggerRainBtn" class="mini-btn btn-secondary">&#x1F327; Trigger rain</button>
           <button type="button" id="triggerTeaBtn" class="mini-btn btn-secondary">&#x1F375; Trigger tea time</button>
           <button type="button" id="triggerHydrateBtn" class="mini-btn btn-secondary">&#x1F4A7; Trigger hydrate</button>
+          <button type="button" id="triggerPipeBtn" class="mini-btn btn-secondary">&#x1F7E2; Trigger pipe</button>
           <button type="button" id="triggerFinishBtn" class="mini-btn btn-secondary">&#x1F3C1; Trigger finish</button>
           <label class="field toggle">
             <input type="checkbox" id="fastTopiToggle" />

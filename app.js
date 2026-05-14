@@ -4,7 +4,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '2.1.';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -14,6 +14,7 @@ const defaultSettings = {
   durationMin: 90,
   effects: true,
   alarm: true,
+  pipeSounds: true,
   roundStart: true,
   slackMode: 'off', // 'off' | 'manual' | 'auto'
   devMode: false,
@@ -61,6 +62,7 @@ const settingsCloseBtn = $('settingsCloseBtn');
 const durationDisplay = $('durationDisplay');
 const effectsToggle = $('effectsToggle');
 const alarmToggle = $('alarmToggle');
+const pipeSoundsToggle = $('pipeSoundsToggle');
 const roundStartToggle = $('roundStartToggle');
 const slackModeSel = $('slackMode');
 const stepperBtns = document.querySelectorAll('.stepper:not(.time-stepper) .stepper-btn');
@@ -72,11 +74,14 @@ const triggerRsiBtn = $('triggerRsiBtn');
 const triggerRainBtn = $('triggerRainBtn');
 const triggerTeaBtn = $('triggerTeaBtn');
 const triggerHydrateBtn = $('triggerHydrateBtn');
+const triggerPipeBtn = $('triggerPipeBtn');
 const triggerFinishBtn = $('triggerFinishBtn');
 const fastTopiToggle = $('fastTopiToggle');
 const topiEl = document.querySelector('.topi');
 const speechBubbleTea = document.querySelector('.speech-bubble--tea');
 const speechBubbleHydrate = document.querySelector('.speech-bubble--hydrate');
+const pipeLeftEl = $('pipeLeft');
+const pipeRightEl = $('pipeRight');
 const ideTyping = $('ideTyping');
 const ideCaret = $('ideCaret');
 const ideError = $('ideError');
@@ -130,6 +135,8 @@ const state = {
   deployTypeHandles: [],
   teaTimeHandle: null,
   teaTimeHideHandle: null,
+  pipeHandles: [],
+  pipeInFlight: false,
 };
 
 const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
@@ -191,9 +198,9 @@ function renderTime(ms) {
   }
 }
 
-function startTimer({ endAt = null, silent = false } = {}) {
+function startTimer({ endAt = null, silent = false, fromSharedLink = false } = {}) {
   if (state.phase === 'deploying') exitDeployState();
-  state.fromSharedLink = silent;
+  state.fromSharedLink = fromSharedLink;
   const totalMs = settings.durationMin * 60 * 1000;
   const FIVE_MIN_MS = 5 * 60 * 1000;
   const startAt = settings.roundStart
@@ -248,6 +255,7 @@ function startTimer({ endAt = null, silent = false } = {}) {
   }
 
   scheduleTopiVisits();
+  schedulePipeVisits();
   scheduleRsiBreaks();
   scheduleRainShowers();
   scheduleTeaTime();
@@ -311,6 +319,7 @@ function resetTimer() {
   state.tickHandle = null;
   stopAlarmLoop();
   cancelTopi();
+  cancelPipes();
   cancelRsi();
   cancelRain();
   cancelTeaTime();
@@ -349,6 +358,7 @@ function finish() {
   clearInterval(state.tickHandle);
   state.tickHandle = null;
   cancelTopi();
+  cancelPipes();
   cancelRsi();
   cancelRain();
   cancelTeaTime();
@@ -647,6 +657,13 @@ const sfx = {
       if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch (_) { /* autoplay blocked — ignore */ }
   },
+  popOut() {
+    // Four-note ascending 8-bit arpeggio — short but distinct, low volume.
+    beep(660,  0.08, 'square', 0.05);
+    beep(880,  0.08, 'square', 0.05, 0.09);
+    beep(1100, 0.09, 'square', 0.05, 0.18);
+    beep(1320, 0.12, 'square', 0.04, 0.28);
+  },
 };
 
 // ---------- IDE typing animation (runs while boss is at laptop) ----------
@@ -793,6 +810,12 @@ function stopIdeTyping() {
 
 function showTokenJoke() {
   if (state.phase !== 'running') return;
+  // If RSI is on-screen, defer so the error icon + frozen prompt aren't
+  // written underneath the bar and revealed when the break ends.
+  if (state.rsiActive) {
+    state.tokenJokeHandle = setTimeout(showTokenJoke, 5_000);
+    return;
+  }
   state.tokenJokeShown = true;
   ideTypingActive = false;
   if (ideTypingHandle) { clearTimeout(ideTypingHandle); ideTypingHandle = null; }
@@ -971,6 +994,109 @@ function showHydrate(durationMs) {
 function cancelHydrate() {
   if (state.hydrateHideHandle) { clearTimeout(state.hydrateHideHandle); state.hydrateHideHandle = null; }
   if (speechBubbleHydrate) speechBubbleHydrate.classList.remove('show');
+}
+
+// ---------- Mario pipe character cameos ----------
+const PIPE_CHARACTERS = [
+  { id: 'Frank',  shirt: '#e63946', texts: ['Is it ready yet?'] },
+  { id: 'QA',     shirt: '#3a86ff', texts: ['This is not conforming the ISO 948488448888 standard!'] },
+  { id: 'Lars',   shirt: '#fb8500', texts: ['Nooo, not another review', 'Rustaaaggghh'] },
+  { id: 'Jarno',  shirt: '#2a9d8f', texts: ['Theee!'] },
+  { id: 'Rene',   shirt: '#7c3aed', texts: ['d.n.d. I am Vibe Testing', 'check the new features in the sync timer'] },
+  { id: 'Marlou', shirt: '#ec4899', texts: ["I'll be back before you know it."] },
+  { id: 'Tom',    shirt: '#0d9488', texts: ["CoPilot is doing weird things again"] },
+  { id: 'Peter',  shirt: '#fbbf24', texts: ["Let's have some fun. I turned Yolo mode on"] },
+  { id: 'Silke',  shirt: '#4b5563', texts: ["Why am I the only one here in the office?"] },
+];
+const PIPE_VISIT_COUNT = 20;
+const PIPE_VISIT_TAIL_MS = 30 * 1000;
+const PIPE_VISIT_DURATION_MS = 8000;
+
+function getPipeEl(side) {
+  return side === 'left' ? pipeLeftEl : pipeRightEl;
+}
+
+function runPipeVisit({ pipe, character, text }) {
+  const el = getPipeEl(pipe);
+  if (!el) return;
+  if (state.pipeInFlight) return; // skip if one is already mid-cameo
+  state.pipeInFlight = true;
+  const charEl = el.querySelector('.pipe-character');
+  const bodyEl = el.querySelector('.pipe-char-body');
+  const nameEl = el.querySelector('.pipe-char-name');
+  const bubbleEl = el.querySelector('.pipe-bubble');
+  const bubbleTextEl = el.querySelector('.pipe-bubble-text');
+  if (charEl) charEl.setAttribute('data-char', character.id);
+  if (bodyEl) bodyEl.style.background = character.shirt;
+  if (nameEl) nameEl.textContent = character.id;
+  if (bubbleTextEl) bubbleTextEl.textContent = text;
+
+  if (settings.effects && settings.pipeSounds) sfx.popOut();
+  charEl.classList.remove('retreating');
+  charEl.classList.add('show');
+
+  const h1 = setTimeout(() => {
+    bubbleEl.classList.add('show');
+  }, 400);
+  state.pipeHandles.push(h1);
+
+  const h2 = setTimeout(() => {
+    bubbleEl.classList.remove('show');
+  }, 400 + PIPE_VISIT_DURATION_MS);
+  state.pipeHandles.push(h2);
+
+  const h3 = setTimeout(() => {
+    charEl.classList.add('retreating');
+    charEl.classList.remove('show');
+  }, 600 + PIPE_VISIT_DURATION_MS);
+  state.pipeHandles.push(h3);
+
+  const h4 = setTimeout(() => {
+    charEl.classList.remove('retreating');
+    state.pipeInFlight = false;
+  }, 1100 + PIPE_VISIT_DURATION_MS);
+  state.pipeHandles.push(h4);
+}
+
+function schedulePipeVisits() {
+  cancelPipes();
+  const now = Date.now();
+  const sessionStart = state.endAt - state.totalMs;
+  const windowEnd = state.endAt - PIPE_VISIT_TAIL_MS;
+  const windowMs = windowEnd - sessionStart;
+  if (windowMs <= 0) return;
+
+  // Same PRNG family as topi, but seeded with +1 offset so the schedules
+  // don't sync to each other predictably while staying deterministic
+  // across shared-link viewers.
+  const rand = mulberry32(Math.floor(state.endAt / 1000) + 1);
+
+  for (let i = 0; i < PIPE_VISIT_COUNT; i++) {
+    const bucketStart = sessionStart + (windowMs / PIPE_VISIT_COUNT) * i;
+    const bucketEnd   = sessionStart + (windowMs / PIPE_VISIT_COUNT) * (i + 1);
+    const when = bucketStart + rand() * (bucketEnd - bucketStart);
+    const delay = when - now;
+    const charIdx = Math.floor(rand() * PIPE_CHARACTERS.length);
+    const character = PIPE_CHARACTERS[charIdx];
+    const text = character.texts[Math.floor(rand() * character.texts.length)];
+    const pipe = rand() < 0.5 ? 'left' : 'right';
+    if (delay < 0) continue;
+    const h = setTimeout(() => runPipeVisit({ pipe, character, text }), delay);
+    state.pipeHandles.push(h);
+  }
+}
+
+function cancelPipes() {
+  state.pipeHandles.forEach((h) => clearTimeout(h));
+  state.pipeHandles = [];
+  state.pipeInFlight = false;
+  [pipeLeftEl, pipeRightEl].forEach((el) => {
+    if (!el) return;
+    const charEl = el.querySelector('.pipe-character');
+    const bubbleEl = el.querySelector('.pipe-bubble');
+    if (charEl) { charEl.classList.remove('show', 'retreating'); }
+    if (bubbleEl) { bubbleEl.classList.remove('show'); }
+  });
 }
 
 // ---------- Topi cameos ----------
@@ -1172,6 +1298,7 @@ function openSettings() {
   durationDisplay.textContent = String(settings.durationMin);
   effectsToggle.checked = settings.effects;
   alarmToggle.checked = settings.alarm;
+  pipeSoundsToggle.checked = settings.pipeSounds;
   roundStartToggle.checked = settings.roundStart;
   slackModeSel.value = settings.slackMode;
   if (devModeToggle) devModeToggle.checked = settings.devMode;
@@ -1222,6 +1349,10 @@ effectsToggle.addEventListener('change', () => {
 });
 alarmToggle.addEventListener('change', () => {
   settings.alarm = alarmToggle.checked;
+  saveSettings(settings);
+});
+pipeSoundsToggle.addEventListener('change', () => {
+  settings.pipeSounds = pipeSoundsToggle.checked;
   saveSettings(settings);
 });
 roundStartToggle.addEventListener('change', () => {
@@ -1304,10 +1435,26 @@ if (triggerHydrateBtn) {
   });
 }
 
+if (triggerPipeBtn) {
+  triggerPipeBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(() => {
+      cancelPipes();
+      const character = PIPE_CHARACTERS[Math.floor(Math.random() * PIPE_CHARACTERS.length)];
+      const text = character.texts[Math.floor(Math.random() * character.texts.length)];
+      const pipe = Math.random() < 0.5 ? 'left' : 'right';
+      runPipeVisit({ pipe, character, text });
+    }, 80);
+  });
+}
+
 if (triggerFinishBtn) {
   triggerFinishBtn.addEventListener('click', () => {
     closeSettings();
     setTimeout(() => {
+      // Re-firing finish() while the alarm is already looping would jump
+      // currentTime back to 0 mid-jingle (stutter). Bail out.
+      if (state.phase === 'finished') return;
       // If idle, populate session state silently so finish() has something to wind down.
       if (state.phase === 'idle' || state.phase === 'deploying') {
         if (state.phase === 'deploying') exitDeployState();
@@ -1451,7 +1598,7 @@ if (shared) {
   // Override duration for this view only — don't persist to localStorage.
   settings.durationMin = shared.durationMin;
   // silent: skip roar/flash since the session is already mid-flight for us.
-  startTimer({ endAt: shared.endAt, silent: true });
+  startTimer({ endAt: shared.endAt, silent: true, fromSharedLink: true });
 } else {
   renderIdle();
 }

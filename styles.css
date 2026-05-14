@@ -1860,3 +1860,729 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
   .start-btn { font-size: 16px; padding: 18px 32px; }
   .title { font-size: 12px; }
 }
+
+/* ============================================================
+   Mario castle — pure CSS pixel art on the far horizon
+   ============================================================ */
+.castle {
+  position: fixed;
+  bottom: 96px;
+  right: 16vw;
+  width: 240px;
+  height: 220px;
+  z-index: 2;
+  pointer-events: none;
+  transform-origin: bottom center;
+  /* Atmospheric perspective — slightly washed out + cooler tone for distance. */
+  filter: saturate(0.78) brightness(1.05);
+  opacity: 0.94;
+}
+.castle-hill {
+  position: absolute;
+  bottom: -12px;
+  left: -30px;
+  right: -30px;
+  height: 36px;
+  background:
+    radial-gradient(ellipse at center bottom, #6ea84a 0% 50%, transparent 70%);
+  z-index: 0;
+}
+/* Smaller back tower sits behind the keep — adds depth */
+.castle-back-tower {
+  position: absolute;
+  bottom: 96px;
+  left: 38px;
+  width: 42px;
+  z-index: 1;
+  filter: brightness(0.82) saturate(0.7);
+}
+.castle-back-tower-top {
+  width: 42px;
+  height: 10px;
+  background:
+    linear-gradient(to right,
+      #8c7e6e 0 10px,
+      transparent 10px 16px,
+      #8c7e6e 16px 26px,
+      transparent 26px 32px,
+      #8c7e6e 32px 42px
+    );
+  border-left: 3px solid #000;
+  border-right: 3px solid #000;
+  box-sizing: border-box;
+}
+.castle-back-tower-body {
+  position: relative;
+  width: 42px;
+  height: 60px;
+  background:
+    repeating-linear-gradient(
+      to right,
+      #8c7e6e 0 14px,
+      #5d4f42 14px 16px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      #8c7e6e 0 14px,
+      #5d4f42 14px 16px
+    );
+  background-blend-mode: multiply;
+  border: 3px solid #000;
+  border-top: 0;
+  box-sizing: border-box;
+}
+.castle-base {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 240px;
+  z-index: 3;
+}
+.castle-base-top {
+  width: 240px;
+  height: 22px;
+  background:
+    linear-gradient(to right,
+      #a8998a 0 22px,
+      transparent 22px 32px,
+      #a8998a 32px 54px,
+      transparent 54px 64px,
+      #a8998a 64px 86px,
+      transparent 86px 96px,
+      #a8998a 96px 118px,
+      transparent 118px 128px,
+      #a8998a 128px 150px,
+      transparent 150px 160px,
+      #a8998a 160px 182px,
+      transparent 182px 192px,
+      #a8998a 192px 214px,
+      transparent 214px 224px,
+      #a8998a 224px 240px
+    );
+  border-left: 3px solid #000;
+  border-right: 3px solid #000;
+  box-sizing: border-box;
+}
+.castle-base-body {
+  position: relative;
+  width: 240px;
+  height: 100px;
+  background:
+    /* Right-side shadow column for depth */
+    linear-gradient(to right, transparent 0 78%, rgba(0,0,0,0.18) 100%),
+    repeating-linear-gradient(
+      to right,
+      #a8998a 0 38px,
+      #7a6a5a 38px 40px,
+      #a8998a 40px 78px,
+      #7a6a5a 78px 80px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      #a8998a 0 20px,
+      #7a6a5a 20px 22px
+    );
+  background-blend-mode: normal, multiply, multiply;
+  border: 3px solid #000;
+  border-top: 0;
+  box-sizing: border-box;
+}
+.castle-door {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 56px;
+  background: linear-gradient(to bottom, #1a1010 0%, #2a1414 100%);
+  border: 3px solid #000;
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  box-sizing: border-box;
+}
+.castle-door::before {
+  /* portcullis lattice */
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background:
+    repeating-linear-gradient(to right, transparent 0 6px, rgba(255,255,255,0.08) 6px 7px),
+    repeating-linear-gradient(to bottom, transparent 0 6px, rgba(255,255,255,0.08) 6px 7px);
+  border-radius: 16px 16px 0 0;
+}
+.castle-window--base {
+  position: absolute;
+  bottom: 60px;
+}
+.castle-window--base:nth-of-type(1) { left: 40px; }
+.castle-window--base:nth-of-type(2) { right: 40px; }
+.castle-keep {
+  position: absolute;
+  bottom: 122px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  z-index: 2;
+}
+.castle-keep-top {
+  width: 96px;
+  height: 16px;
+  background:
+    linear-gradient(to right,
+      #a8998a 0 16px,
+      transparent 16px 24px,
+      #a8998a 24px 40px,
+      transparent 40px 48px,
+      #a8998a 48px 64px,
+      transparent 64px 72px,
+      #a8998a 72px 88px,
+      transparent 88px 96px
+    );
+  border-left: 3px solid #000;
+  border-right: 3px solid #000;
+  box-sizing: border-box;
+}
+.castle-keep-body {
+  position: relative;
+  width: 96px;
+  height: 84px;
+  background:
+    linear-gradient(to right, transparent 0 78%, rgba(0,0,0,0.18) 100%),
+    repeating-linear-gradient(
+      to right,
+      #a8998a 0 22px,
+      #7a6a5a 22px 24px,
+      #a8998a 24px 46px,
+      #7a6a5a 46px 48px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      #a8998a 0 18px,
+      #7a6a5a 18px 20px
+    );
+  background-blend-mode: normal, multiply, multiply;
+  border: 3px solid #000;
+  border-top: 0;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.castle-window {
+  width: 14px;
+  height: 18px;
+  background: #f7c948;
+  border: 2px solid #000;
+  border-radius: 7px 7px 0 0;
+  box-sizing: border-box;
+  display: inline-block;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25);
+}
+.castle-pole {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 52px;
+  background: linear-gradient(to right, #1a1a1a, #3a3a3a, #1a1a1a);
+}
+.castle-flag {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 32px;
+  height: 22px;
+  background: linear-gradient(to bottom, #e63946 0%, #c1121f 100%);
+  border: 2px solid #000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: left center;
+  animation: castleFlagWave 2.2s ease-in-out infinite;
+}
+.castle-flag-letter {
+  font-family: var(--pixel-font);
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  line-height: 1;
+}
+@keyframes castleFlagWave {
+  0%, 100% { transform: skewX(0deg); }
+  50%      { transform: skewX(-10deg); }
+}
+
+/* ============================================================
+   Mario pipes + character cameos
+   ============================================================ */
+.pipe {
+  position: fixed;
+  bottom: 96px;
+  width: 110px;
+  height: 100px;
+  z-index: 3;
+  pointer-events: none;
+}
+.pipe--left  { left: 24px; height: 150px; }
+.pipe--right { right: 24px; }
+/* Taller left pipe — push rim/shaft up so the character emerges from the top. */
+.pipe--left .pipe-rim       { bottom: 122px; }
+.pipe--left .pipe-shaft     { height: 122px; }
+.pipe--left .pipe-character { bottom: 138px; }
+.pipe--left .pipe-bubble    { bottom: 218px; }
+.pipe-rim {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background:
+    linear-gradient(
+      to bottom,
+      var(--pipe-green) 0 6px,
+      #00c800 6px 10px,
+      var(--pipe-green) 10px 22px,
+      var(--pipe-green-dark) 22px 28px
+    );
+  border: 3px solid #000;
+  box-sizing: border-box;
+  z-index: 4;
+}
+.pipe-shaft {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 72px;
+  background:
+    linear-gradient(
+      to right,
+      var(--pipe-green-dark) 0 8px,
+      var(--pipe-green) 8px 18px,
+      #00c800 18px 26px,
+      var(--pipe-green) 26px 74px,
+      var(--pipe-green-dark) 74px 100px
+    );
+  border: 3px solid #000;
+  border-top: 0;
+  box-sizing: border-box;
+  z-index: 3;
+}
+.pipe-character {
+  position: absolute;
+  bottom: 88px;
+  left: 50%;
+  width: 60px;
+  height: 78px;
+  transform: translate(-50%, 100%);
+  opacity: 0;
+  transition: transform 0.4s ease-out, opacity 0.2s linear;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+.pipe-character.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.pipe-character.retreating {
+  transform: translate(-50%, 100%);
+  transition: transform 0.4s ease-in, opacity 0.2s linear;
+}
+.pipe-char-hair {
+  position: relative;
+  width: 32px;
+  height: 10px;
+  background: transparent;
+  z-index: 2;
+  pointer-events: none;
+  margin-bottom: -4px;
+}
+.pipe-char-head {
+  position: relative;
+  width: 32px;
+  height: 30px;
+  background: #f3cda1;
+  border: 3px solid #000;
+  border-radius: 50%;
+  box-sizing: border-box;
+  z-index: 1;
+}
+.pipe-char-eye {
+  position: absolute;
+  top: 10px;
+  width: 5px;
+  height: 6px;
+  background: #000;
+  border-radius: 50%;
+}
+.pipe-char-eye--l { left: 6px; }
+.pipe-char-eye--r { right: 6px; }
+.pipe-char-eye::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+}
+.pipe-char-brow {
+  position: absolute;
+  top: 5px;
+  width: 8px;
+  height: 2px;
+  background: #4a3520;
+  display: none;
+}
+.pipe-char-brow--l { left: 4px; }
+.pipe-char-brow--r { right: 4px; }
+.pipe-char-mouth {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 3px;
+  background: #6e3a1a;
+  border-radius: 0;
+}
+.pipe-char-glasses {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 8px;
+  display: none;
+  pointer-events: none;
+}
+.pipe-char-glasses::before,
+.pipe-char-glasses::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #000;
+  background: rgba(255,255,255,0.4);
+  box-sizing: border-box;
+  border-radius: 2px;
+}
+.pipe-char-glasses::before { left: 0; }
+.pipe-char-glasses::after  { right: 0; }
+.pipe-char-body {
+  position: relative;
+  width: 48px;
+  height: 36px;
+  background: #888;
+  border: 3px solid #000;
+  border-radius: 6px 6px 2px 2px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 0;
+}
+.pipe-char-arm {
+  position: absolute;
+  top: 6px;
+  width: 7px;
+  height: 18px;
+  background: inherit;
+  border: 3px solid #000;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.pipe-char-arm--l { left: -8px; transform: rotate(8deg); }
+.pipe-char-arm--r { right: -8px; transform: rotate(-8deg); }
+.pipe-char-name {
+  font-family: var(--pixel-font);
+  font-size: 8px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+/* ---------- Per-character variations ---------- */
+
+/* Frank — orange hard hat, worried face */
+.pipe-character[data-char="Frank"] .pipe-char-hair {
+  width: 36px;
+  height: 12px;
+  background: #d97706;
+  border: 3px solid #000;
+  border-radius: 18px 18px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Frank"] .pipe-char-hair::after {
+  /* hard-hat brim */
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: -4px;
+  right: -4px;
+  height: 4px;
+  background: #b45309;
+  border: 3px solid #000;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Frank"] .pipe-char-mouth {
+  width: 10px;
+  height: 3px;
+  border-radius: 0;
+}
+
+/* QA — dark hair, glasses, slight smile */
+.pipe-character[data-char="QA"] .pipe-char-hair {
+  width: 30px;
+  height: 8px;
+  background: #4a3624;
+  border: 3px solid #000;
+  border-radius: 14px 14px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="QA"] .pipe-char-glasses { display: block; }
+.pipe-character[data-char="QA"] .pipe-char-mouth {
+  width: 8px;
+  height: 4px;
+  border-radius: 0 0 6px 6px;
+  background: #000;
+}
+
+/* Lars — spiky red hair, angry V brows, open mouth */
+.pipe-character[data-char="Lars"] .pipe-char-hair {
+  width: 36px;
+  height: 12px;
+  background: #b91c1c;
+  clip-path: polygon(0% 100%, 8% 30%, 18% 70%, 28% 15%, 42% 65%, 56% 20%, 70% 70%, 84% 25%, 96% 65%, 100% 100%);
+}
+.pipe-character[data-char="Lars"] .pipe-char-brow {
+  display: block;
+  background: #5c1a0c;
+}
+.pipe-character[data-char="Lars"] .pipe-char-brow--l { transform: rotate(20deg); }
+.pipe-character[data-char="Lars"] .pipe-char-brow--r { transform: rotate(-20deg); }
+.pipe-character[data-char="Lars"] .pipe-char-mouth {
+  width: 12px;
+  height: 6px;
+  border-radius: 2px;
+  background: #4a0e08;
+}
+
+/* Jarno — green cap with brim, wide smile */
+.pipe-character[data-char="Jarno"] .pipe-char-hair {
+  width: 34px;
+  height: 10px;
+  background: #15803d;
+  border: 3px solid #000;
+  border-radius: 16px 16px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Jarno"] .pipe-char-hair::after {
+  /* cap brim */
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 6px;
+  width: 18px;
+  height: 4px;
+  background: #166534;
+  border: 3px solid #000;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Jarno"] .pipe-char-mouth {
+  width: 14px;
+  height: 7px;
+  border-radius: 0 0 8px 8px;
+  background: #000;
+}
+
+/* Rene — short grey hair, glasses, slight smile */
+.pipe-character[data-char="Rene"] .pipe-char-hair {
+  width: 26px;
+  height: 6px;
+  background: #9ca3af;
+  border: 3px solid #000;
+  border-radius: 12px 12px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Rene"] .pipe-char-glasses { display: block; }
+.pipe-character[data-char="Rene"] .pipe-char-mouth {
+  width: 9px;
+  height: 4px;
+  border-radius: 0 0 5px 5px;
+  background: #000;
+}
+
+/* Marlou — long blonde hair, friendly smile */
+.pipe-character[data-char="Marlou"] .pipe-char-hair {
+  width: 36px;
+  height: 14px;
+  background: #fde68a;
+  border: 3px solid #000;
+  border-radius: 18px 18px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Marlou"] .pipe-char-hair::after {
+  /* long hair flowing down behind the head */
+  content: '';
+  position: absolute;
+  bottom: -22px;
+  left: -2px;
+  right: -2px;
+  height: 28px;
+  background: #fde68a;
+  border: 3px solid #000;
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  box-sizing: border-box;
+  z-index: -1;
+}
+.pipe-character[data-char="Marlou"] .pipe-char-mouth {
+  width: 12px;
+  height: 6px;
+  border-radius: 0 0 7px 7px;
+  background: #c0392b;
+}
+
+/* Tom — messy brown hair, neutral mouth */
+.pipe-character[data-char="Tom"] .pipe-char-hair {
+  width: 34px;
+  height: 12px;
+  background: #78350f;
+  clip-path: polygon(0 100%, 6% 50%, 16% 80%, 28% 30%, 40% 75%, 52% 25%, 64% 80%, 76% 35%, 88% 75%, 100% 100%);
+}
+.pipe-character[data-char="Tom"] .pipe-char-mouth {
+  width: 10px;
+  height: 3px;
+  border-radius: 0;
+}
+
+/* Peter — yellow quiff, playful wink (one eye smaller), open grin */
+.pipe-character[data-char="Peter"] .pipe-char-hair {
+  width: 32px;
+  height: 14px;
+  background: #f59e0b;
+  border: 3px solid #000;
+  border-radius: 16px 4px 0 0;
+  box-sizing: border-box;
+  transform: skewX(-12deg);
+  margin-bottom: -6px;
+}
+.pipe-character[data-char="Peter"] .pipe-char-eye--l {
+  height: 3px;
+  top: 12px;
+  border-radius: 1px;
+}
+.pipe-character[data-char="Peter"] .pipe-char-mouth {
+  width: 13px;
+  height: 6px;
+  border-radius: 0 0 7px 7px;
+  background: #000;
+}
+
+/* Silke — long dark hair, tired face (small mouth, slight frown brows) */
+.pipe-character[data-char="Silke"] .pipe-char-hair {
+  width: 36px;
+  height: 12px;
+  background: #1f2937;
+  border: 3px solid #000;
+  border-radius: 18px 18px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Silke"] .pipe-char-hair::after {
+  /* long dark hair down behind the head */
+  content: '';
+  position: absolute;
+  bottom: -24px;
+  left: -2px;
+  right: -2px;
+  height: 30px;
+  background: #1f2937;
+  border: 3px solid #000;
+  border-top: 0;
+  border-radius: 0 0 18px 18px;
+  box-sizing: border-box;
+  z-index: -1;
+}
+.pipe-character[data-char="Silke"] .pipe-char-brow {
+  display: block;
+  background: #0f172a;
+}
+.pipe-character[data-char="Silke"] .pipe-char-brow--l { transform: rotate(-12deg); }
+.pipe-character[data-char="Silke"] .pipe-char-brow--r { transform: rotate(12deg); }
+.pipe-character[data-char="Silke"] .pipe-char-mouth {
+  width: 7px;
+  height: 2px;
+  border-radius: 0;
+  background: #6e3a1a;
+}
+.pipe-bubble {
+  position: absolute;
+  bottom: 168px;
+  min-width: 140px;
+  max-width: 240px;
+  width: max-content;
+  background: #fff;
+  color: #000;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 10px 14px;
+  border: 4px solid #000;
+  border-radius: 8px;
+  white-space: normal;
+  text-align: center;
+  box-shadow: 4px 4px 0 #000;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+  z-index: 50;
+}
+.pipe-bubble::before,
+.pipe-bubble::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+.pipe-bubble::before {
+  bottom: -18px;
+  border-width: 18px 11px 0 11px;
+  border-color: #000 transparent transparent transparent;
+}
+.pipe-bubble::after {
+  bottom: -11px;
+  border-width: 11px 7px 0 7px;
+  border-color: #fff transparent transparent transparent;
+}
+.pipe-bubble.show {
+  opacity: 1;
+  animation: bubbleWiggle 1.2s ease-in-out infinite;
+}
+/* Anchor each side's bubble inward so it never clips the viewport. */
+.pipe--left .pipe-bubble  { left: 30px; right: auto; }
+.pipe--right .pipe-bubble { right: 30px; left: auto; }
+.pipe--left .pipe-bubble::before  { left: 28px; margin-left: -11px; }
+.pipe--left .pipe-bubble::after   { left: 28px; margin-left: -7px; }
+.pipe--right .pipe-bubble::before { right: 28px; margin-right: -11px; }
+.pipe--right .pipe-bubble::after  { right: 28px; margin-right: -7px; }
+
+@media (max-width: 640px) {
+  .pipe { transform: scale(0.7); transform-origin: bottom center; }
+  .castle { right: 6vw; transform: scale(0.55); transform-origin: bottom right; }
+}
+@media (max-width: 1100px) and (min-width: 641px) {
+  .castle { transform: scale(0.78); transform-origin: bottom right; right: 12vw; }
+}

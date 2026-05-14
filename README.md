@@ -8,14 +8,14 @@ A Super Mario-themed countdown timer for team **Eindbazen**. Hit the big **START
 - Configurable countdown duration (30–240 min, in 30-min steps; default 90).
 - Timer display shows **minutes** until the last minute, then switches to **seconds**.
 - Endboss scene (pure CSS pixel art, no external sprites):
-  - **Idle** before start
-  - **Working at laptop** during first half
-  - **Tired** after halfway
-  - **Defeated + coin confetti** at finish
+  - **Idle** before start → **Working at laptop** → **Tired** at halfway → **Sleeping** in the final 10 min → **Defeated + coin confetti** at finish → **Deploying** (with green log overlay + cloud coin showers) after dismissing the finish banner.
+  - In-scene gags running underneath: a Claude-Code-style IDE typing animation, a "token joke" error at the 5-minute mark, periodic RSI-break overlays, hydration nudge at halfway, tea-time speech bubble 5 min before the end, occasional rain showers, Topi the chameleon cameos on the laptop, and Mario-pipe character pop-ups (Frank, QA, Lars, Jarno, Rene, Marlou, Tom, Peter, Silke). A Mario castle sits on the horizon.
 - Sound effects & finish alarm — independent on/off toggles in settings.
-  - Currently synthesized chiptune via Web Audio (no IP risk).
-  - Swap in real SMB clips later — see [Using real Mario sounds](#using-real-mario-sounds).
-- Slack alert (manual button or auto-send) via Netlify Function proxy.
+  - Most sounds synthesized via Web Audio (no IP risk); a few real clips ship in `assets/sounds/` — see [Using real Mario sounds](#using-real-mario-sounds).
+- **Clock mode** (🕑 button): pick an exact end-of-day time instead of a duration.
+- **Shareable session link** (🔗 button): copies a URL with `endAt` in the hash so teammates open it and count down to the same wall-clock moment — no backend.
+- **Dev mode** (in Settings): manual triggers for every scene + a fast-topi schedule for visual testing.
+- Slack alert (manual button or auto-send) via Netlify Function proxy. Includes a "Share on Slack" button that posts the shareable link to the channel when a session starts.
 
 ## Local development
 
@@ -52,9 +52,14 @@ Calling the Slack webhook directly from the browser would expose the URL to anyo
 
 Most sounds (boss roar, click, start-sync fanfare) are synthesized at runtime via Web Audio square/sawtooth oscillators — no audio files, no IP risk.
 
-The **finish alarm** ships as a real audio file: `assets/sounds/level-complete.mp3` (the SMB level-complete jingle). It's wired up in [app.js](app.js) via `sfx.alarm()` and looped through `alarmAudio.loop` until the user dismisses the finish banner. To swap it out, replace the file or change the path in the `new Audio(...)` call.
+Four real audio files ship in `assets/sounds/`:
 
-To add more real clips:
+- `level-complete.mp3` — finish alarm, looped via `alarmAudio.loop` until the user dismisses the finish banner.
+- `sync-start.mp3` — start fanfare.
+- `pipe.mp3` — tea-time chirp.
+- `water.mp3` — hydration nudge gulp.
+
+To swap them out, replace the file or change the path in the matching `new Audio(...)` call at the top of [app.js](app.js). To add more real clips:
 
 1. Drop MP3 files into `assets/sounds/`, e.g. `roar.mp3`, `click.mp3`.
 2. In [app.js](app.js), follow the `alarmAudio` pattern: create an `Audio` element at module scope, then call `.play()` from the relevant `sfx` method.
@@ -73,9 +78,12 @@ To add more real clips:
 ├── index.html
 ├── styles.css
 ├── app.js
+├── favicon.svg
 ├── netlify.toml
+├── assets/
+│   └── sounds/                  # level-complete.mp3, sync-start.mp3, pipe.mp3, water.mp3
 └── netlify/
     └── functions/
-        └── slack.js   # POST /.netlify/functions/slack
+        └── slack.js             # POST /.netlify/functions/slack
 ```
 # eindbazen-sync-timer
