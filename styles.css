@@ -37,6 +37,9 @@
   --topi-eye-white:   #ffffff;
   --topi-eye-pupil:   #111111;
   --topi-mouth:       #6b3a00;
+  /* Global scene scale — drives boss + pipes + their bubbles together so the
+     scene grows on large screens (TV) and shrinks on small/short ones. */
+  --scene-scale: 1;
 }
 
 html, body {
@@ -167,7 +170,7 @@ body {
 
 .topbar-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
   align-items: center;
 }
@@ -206,8 +209,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 28px;
-  padding: 8px 20px 20px;
+  gap: 16px;
+  padding: 2px 20px 20px;
 }
 
 /* ---------- Timer: 16-bit SNES scoreboard style ---------- */
@@ -217,7 +220,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 18px;
-  padding: 32px 56px;
+  padding: 24px 56px;
   background:
     linear-gradient(to bottom, #1a1a3a 0%, #0a0a1a 100%);
   border: 6px solid #000;
@@ -244,7 +247,9 @@ body {
   pointer-events: none;
 }
 .timer #timerValue {
-  font-size: clamp(96px, 18vw, 200px);
+  /* Height-aware so the timer can't dominate short laptop viewports and
+     hide the boss; capped at 200px so it stays sane on huge TV screens. */
+  font-size: clamp(64px, min(15vw, 20vh), 168px);
   line-height: 1;
   letter-spacing: 8px;
   color: var(--coin-gold);
@@ -387,6 +392,10 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
   align-items: flex-end;
   justify-content: center;
   padding-bottom: 96px;
+  /* Scale the boss as a whole, anchored to the ground. Applied here (not on
+     .endboss) so the boss-breathing transform animation keeps working. */
+  transform: scale(var(--scene-scale));
+  transform-origin: bottom center;
 }
 
 .endboss {
@@ -1848,17 +1857,43 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
 /* ============================================================
    Mobile-ish responsive (desktop-first, but don't be broken)
    ============================================================ */
+/* ---- Width tiers: scale the whole scene via --scene-scale ---- */
+@media (min-width: 1600px) {
+  :root { --scene-scale: 1.2; }
+}
+@media (min-width: 2200px) {
+  /* Big TV / wall display — grow boss, pipes and their bubbles for distance. */
+  :root { --scene-scale: 1.8; }
+  .speech-bubble { font-size: 32px; padding: 24px 40px; }
+}
+@media (min-width: 3200px) {
+  /* 4K wall display viewed from across the room. */
+  :root { --scene-scale: 2.2; }
+  .speech-bubble { font-size: 40px; padding: 28px 48px; }
+}
 @media (max-width: 1100px) and (min-width: 641px) {
-  .endboss { transform: scale(0.78); transform-origin: bottom; }
+  :root { --scene-scale: 0.8; }
   .panel { gap: 20px; }
   .bubble-layer { padding-bottom: 470px; }
 }
 @media (max-width: 640px) {
-  .endboss { width: 380px; height: 320px; transform: scale(0.62); transform-origin: bottom; }
+  :root { --scene-scale: 0.55; }
   .timer { padding: 20px 28px; gap: 10px; }
-  .timer #timerValue { font-size: 72px; letter-spacing: 4px; }
+  .timer #timerValue { letter-spacing: 4px; }
   .start-btn { font-size: 16px; padding: 18px 32px; }
   .title { font-size: 12px; }
+}
+
+/* ---- Short viewports (laptops): shrink the scene so the big timer no
+   longer collides with / hides the boss. Placed after the width tiers so it
+   wins the --scene-scale cascade on wide-but-short laptop screens. ---- */
+@media (max-height: 820px) {
+  :root { --scene-scale: 0.78; }
+  .timer { padding: 20px 40px; }
+}
+@media (max-height: 640px) {
+  :root { --scene-scale: 0.62; }
+  .timer { padding: 14px 28px; }
 }
 
 /* ============================================================
@@ -2124,9 +2159,13 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
   height: 100px;
   z-index: 3;
   pointer-events: none;
+  /* Scale pipe + character + speech bubble together so cameos stay legible
+     from across the room on large screens. */
+  transform: scale(var(--scene-scale));
+  transform-origin: bottom center;
 }
-.pipe--left  { left: 24px; height: 150px; }
-.pipe--right { right: 24px; }
+.pipe--left  { left: 24px; height: 150px; transform-origin: bottom left; }
+.pipe--right { right: 24px; transform-origin: bottom right; }
 /* Taller left pipe — push rim/shaft up so the character emerges from the top. */
 .pipe--left .pipe-rim       { bottom: 122px; }
 .pipe--left .pipe-shaft     { height: 122px; }
@@ -2527,6 +2566,22 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
   height: 2px;
   border-radius: 0;
   background: #6e3a1a;
+}
+
+/* Emil — tidy brown side-part, cheerful open smile */
+.pipe-character[data-char="Emil"] .pipe-char-hair {
+  width: 32px;
+  height: 10px;
+  background: #5b3a1a;
+  border: 3px solid #000;
+  border-radius: 14px 6px 0 0;
+  box-sizing: border-box;
+}
+.pipe-character[data-char="Emil"] .pipe-char-mouth {
+  width: 13px;
+  height: 6px;
+  border-radius: 0 0 8px 8px;
+  background: #000;
 }
 .pipe-bubble {
   position: absolute;

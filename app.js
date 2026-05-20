@@ -920,15 +920,23 @@ function scheduleRainShowers() {
 
 function runRainShower() {
   if (state.phase !== 'running') return;
-  const dropCount = 50 + Math.floor(Math.random() * 30);
-  for (let i = 0; i < dropCount; i++) {
-    const d = document.createElement('div');
-    d.className = 'raindrop';
-    d.style.left = Math.random() * 100 + 'vw';
-    d.style.animationDuration = (0.8 + Math.random() * 1.2) + 's';
-    d.style.animationDelay = (Math.random() * 1.5) + 's';
-    rainContainer.appendChild(d);
-  }
+  const clouds = document.querySelectorAll('.cloud');
+  if (!clouds.length) return;
+  clouds.forEach((cloud) => {
+    const rect = cloud.getBoundingClientRect();
+    // Drops per cloud scale with its width so wider clouds rain more.
+    const dropCount = 14 + Math.floor((rect.width / 130) * 12 + Math.random() * 8);
+    for (let i = 0; i < dropCount; i++) {
+      const d = document.createElement('div');
+      d.className = 'raindrop';
+      // Emerge from across the cloud's underside, at its current drifted position.
+      d.style.left = (rect.left + Math.random() * rect.width) + 'px';
+      d.style.top = (rect.bottom - 4) + 'px';
+      d.style.animationDuration = (0.8 + Math.random() * 1.2) + 's';
+      d.style.animationDelay = (Math.random() * 1.5) + 's';
+      rainContainer.appendChild(d);
+    }
+  });
   const h = setTimeout(() => {
     // Remove only the drops from this shower to avoid clearing concurrent showers' leftovers
     while (rainContainer.firstChild) rainContainer.removeChild(rainContainer.firstChild);
@@ -999,7 +1007,7 @@ function cancelHydrate() {
 // ---------- Mario pipe character cameos ----------
 const PIPE_CHARACTERS = [
   { id: 'Frank',  shirt: '#e63946', texts: ['Is it ready yet?'] },
-  { id: 'QA',     shirt: '#3a86ff', texts: ['This is not conforming the ISO 948488448888 standard!'] },
+  { id: 'QA',     shirt: '#3a86ff', texts: ["We've to check with legal here"] },
   { id: 'Lars',   shirt: '#fb8500', texts: ['Nooo, not another review', 'Rustaaaggghh'] },
   { id: 'Jarno',  shirt: '#2a9d8f', texts: ['Theee!'] },
   { id: 'Rene',   shirt: '#7c3aed', texts: ['d.n.d. I am Vibe Testing', 'check the new features in the sync timer'] },
@@ -1007,10 +1015,11 @@ const PIPE_CHARACTERS = [
   { id: 'Tom',    shirt: '#0d9488', texts: ["CoPilot is doing weird things again"] },
   { id: 'Peter',  shirt: '#fbbf24', texts: ["Let's have some fun. I turned Yolo mode on"] },
   { id: 'Silke',  shirt: '#4b5563', texts: ["Why am I the only one here in the office?"] },
+  { id: 'Emil',   shirt: '#06b6d4', texts: ["Do you like bitterballs?"] },
 ];
-const PIPE_VISIT_COUNT = 20;
+const PIPE_VISIT_COUNT = 8;
 const PIPE_VISIT_TAIL_MS = 30 * 1000;
-const PIPE_VISIT_DURATION_MS = 8000;
+const PIPE_VISIT_DURATION_MS = 60000;
 
 function getPipeEl(side) {
   return side === 'left' ? pipeLeftEl : pipeRightEl;
