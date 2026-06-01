@@ -40,6 +40,8 @@
   /* Global scene scale — drives boss + pipes + their bubbles together so the
      scene grows on large screens (TV) and shrinks on small/short ones. */
   --scene-scale: 1;
+  /* Weather — cloud drift speed multiplier. 1 = normal, >1 = windier. */
+  --cloud-speed-scale: 1;
 }
 
 html, body {
@@ -84,7 +86,7 @@ body {
 .cloud--1 {
   width: 100px; height: 32px;
   top: 14%;
-  animation-duration: 90s;
+  animation-duration: calc(90s / var(--cloud-speed-scale));
   animation-delay: -30s;
 }
 .cloud--1::before { width: 52px; height: 52px; top: -28px; left: 16px; }
@@ -93,7 +95,7 @@ body {
 .cloud--2 {
   width: 70px; height: 24px;
   top: 22%;
-  animation-duration: 120s;
+  animation-duration: calc(120s / var(--cloud-speed-scale));
   animation-delay: -70s;
 }
 .cloud--2::before { width: 38px; height: 38px; top: -22px; left: 10px; }
@@ -102,7 +104,7 @@ body {
 .cloud--3 {
   width: 130px; height: 40px;
   top: 9%;
-  animation-duration: 150s;
+  animation-duration: calc(150s / var(--cloud-speed-scale));
   animation-delay: -10s;
 }
 .cloud--3::before { width: 64px; height: 64px; top: -36px; left: 22px; }
@@ -112,6 +114,80 @@ body {
   from { transform: translateX(-15vw); }
   to   { transform: translateX(115vw); }
 }
+
+/* --- Weather: overcast clouds (grey tint) --- */
+.sky.is-overcast .cloud,
+.sky.is-overcast .cloud::before,
+.sky.is-overcast .cloud::after {
+  background: #b8c4cf;
+}
+
+/* --- Weather: night sky --- */
+body.is-night .ground { filter: brightness(0.6); }
+
+/* Castle stays visible at night but with lit, flickering windows */
+body.is-night .castle { filter: saturate(0.55) brightness(0.72); }
+body.is-night .castle-window {
+  background: #ffe27a;
+  box-shadow: 0 0 7px 2px rgba(255, 226, 122, 0.9), inset 0 -2px 0 rgba(120, 80, 0, 0.4);
+  animation: windowFlicker 3.5s ease-in-out infinite;
+}
+@keyframes windowFlicker {
+  0%, 100% { box-shadow: 0 0 7px 2px rgba(255, 226, 122, 0.9), inset 0 -2px 0 rgba(120, 80, 0, 0.4); }
+  50%      { box-shadow: 0 0 11px 3px rgba(255, 226, 122, 1), inset 0 -2px 0 rgba(120, 80, 0, 0.4); }
+}
+
+/* Dim white clouds at night (the overcast rule still greys them when cloudy/raining) */
+body.is-night .cloud,
+body.is-night .cloud::before,
+body.is-night .cloud::after { background: #3a3f4a; }
+
+/* Starfield — populated by JS, revealed at night */
+.starfield {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s;
+}
+body.is-night .starfield { opacity: 1; }
+.star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 3px #fff;
+  animation: starTwinkle ease-in-out infinite;
+}
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1; }
+}
+
+/* Moon */
+.moon {
+  position: absolute;
+  top: 9%;
+  right: 11%;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  z-index: 0;
+  background: radial-gradient(circle at 36% 34%, #fffceb 0%, #efe9c8 62%, #d8d2b0 100%);
+  box-shadow: 0 0 26px 8px rgba(255, 250, 225, 0.45);
+  opacity: 0;
+  transition: opacity 1.2s;
+  pointer-events: none;
+}
+body.is-night .moon { opacity: 1; }
+.moon-crater {
+  position: absolute;
+  background: rgba(180, 174, 140, 0.6);
+  border-radius: 50%;
+}
+.moon-crater--1 { width: 14px; height: 14px; top: 14px; left: 16px; }
+.moon-crater--2 { width: 9px;  height: 9px;  top: 34px; left: 36px; }
+.moon-crater--3 { width: 7px;  height: 7px;  top: 20px; left: 40px; }
 
 /* ---------- Ground (brick strip at bottom) ---------- */
 .ground {
@@ -1164,6 +1240,85 @@ body:has(.endboss.has-bug) .ide-bug-error {
 .endboss[data-state="sleeping"] .boss-fang { display: none; }
 
 /* ============================================================
+   WEATHER ACCESSORIES — additive classes on .endboss
+   ============================================================ */
+
+/* --- Sunglasses (.is-cool-shades) --- */
+.boss-glasses {
+  display: none;
+  position: absolute;
+  /* Span across both eyes which sit at top: 76px on .boss-head */
+  top: 72px;
+  left: 26px;
+  width: 208px;
+  height: 28px;
+  pointer-events: none;
+  z-index: 5;
+}
+/* Bridge between lenses */
+.boss-glasses::before,
+.boss-glasses::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 70px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.82);
+  border: 3px solid #000;
+  border-radius: 6px;
+  box-shadow: inset 0 5px 0 rgba(255, 255, 255, 0.12), inset -4px 0 0 rgba(255,255,255,0.06);
+}
+.boss-glasses::before { left: 0; }
+.boss-glasses::after  { right: 0; }
+
+.endboss.is-cool-shades .boss-glasses { display: block; }
+
+/* --- Sweat drops (.is-sweating) --- */
+.boss-sweat {
+  position: absolute;
+  top: 28px;
+  right: -14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.boss-sweat span {
+  display: block;
+  width: 10px;
+  height: 14px;
+  background: linear-gradient(to bottom, #88ccff, #3388cc);
+  border: 2px solid #000;
+  border-radius: 50% 50% 60% 60% / 40% 40% 60% 60%;
+  opacity: 0;
+  animation: sweatDrip 1.8s ease-in infinite;
+}
+.boss-sweat span:nth-child(1) { animation-delay: 0s; }
+.boss-sweat span:nth-child(2) { animation-delay: 0.6s; }
+.boss-sweat span:nth-child(3) { animation-delay: 1.2s; }
+
+@keyframes sweatDrip {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 1; }
+  65%  { opacity: 0.7; }
+  100% { transform: translateY(36px); opacity: 0; }
+}
+
+.endboss.is-sweating .boss-sweat { opacity: 1; }
+
+/* --- Shivering (.is-shivering) — additive, overrides breathe animation --- */
+.endboss.is-shivering {
+  animation: bossShiver 0.14s ease-in-out infinite !important;
+}
+@keyframes bossShiver {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%       { transform: translateX(-3px) rotate(-0.8deg); }
+  75%       { transform: translateX(3px)  rotate(0.8deg); }
+}
+
+/* ============================================================
    Finish banner + confetti
    ============================================================ */
 .finish-banner {
@@ -1252,6 +1407,118 @@ body:has(.endboss.has-bug) .ide-bug-error {
   100% { transform: translateY(110vh); opacity: 0.5; }
 }
 
+/* Rain puddles — pooled water on the ground while it's raining */
+.puddle-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 96px;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.puddle {
+  position: absolute;
+  bottom: 8px;
+  height: 9px;
+  background: radial-gradient(ellipse at center, rgba(160, 205, 255, 0.6) 0%, rgba(90, 140, 200, 0.28) 70%, transparent 100%);
+  border-radius: 50%;
+  opacity: 0;
+  transform-origin: center bottom;
+  animation: puddleForm 1.6s ease-out forwards;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+@keyframes puddleForm {
+  0%   { opacity: 0; transform: scale(0.25, 0.5); }
+  100% { opacity: 1; transform: scale(1, 1); }
+}
+
+/* Thunderstorm sky — extra-dark, ominous tint layered over the gradient */
+.sky.is-thunder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(20, 22, 34, 0.55) 0%, rgba(40, 44, 60, 0.35) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Lightning flash — full-screen white overlay, briefly flashed by JS */
+.lightning {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: #fff;
+  opacity: 0;
+}
+.lightning.flashing {
+  animation: lightningFlash 0.9s ease-out;
+}
+/* Double-blink flicker typical of a real strike, then fade. */
+@keyframes lightningFlash {
+  0%   { opacity: 0; }
+  4%   { opacity: 0.9; }
+  10%  { opacity: 0.2; }
+  16%  { opacity: 0.85; }
+  24%  { opacity: 0.1; }
+  40%  { opacity: 0.45; }
+  100% { opacity: 0; }
+}
+
+/* ============================================================
+   Blowing leaves — windy / storm conditions (no precipitation needed)
+   ============================================================ */
+.leaf-container {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+.leaf {
+  position: absolute;
+  left: -40px;
+  width: 14px;
+  height: 14px;
+  /* Two parallel animations: leafBlow (left→right drift) + leafSpin (tumble). */
+  animation-name: leafBlow, leafSpin;
+  animation-timing-function: ease-in, linear;
+  animation-iteration-count: 1, infinite;
+  will-change: transform;
+}
+/* Pixel-art-ish leaf shapes via clip-path + autumn colours */
+.leaf--1 {
+  background: #d97706; /* amber */
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.leaf--2 {
+  background: #b45309; /* brown-orange */
+  width: 12px; height: 16px;
+  clip-path: polygon(50% 0, 90% 35%, 70% 100%, 30% 100%, 10% 35%);
+}
+.leaf--3 {
+  background: #ca8a04; /* gold */
+  width: 16px; height: 12px;
+  border-radius: 50% 0 50% 0;
+}
+
+/* Drift across and downward on the wind, in a gentle wave. */
+@keyframes leafBlow {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  8%   { opacity: 1; }
+  25%  { transform: translate(28vw, 8vh); }
+  50%  { transform: translate(54vw, -4vh); }
+  75%  { transform: translate(80vw, 10vh); }
+  92%  { opacity: 1; }
+  100% { transform: translate(112vw, 4vh); opacity: 0; }
+}
+@keyframes leafSpin {
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
+}
+
 /* ============================================================
    Settings dialog
    ============================================================ */
@@ -1289,6 +1556,17 @@ body:has(.endboss.has-bug) .ide-bug-error {
 }
 .field-label { font-size: 11px; letter-spacing: 1px; }
 .field-help  { font-size: 8px; opacity: 0.8; line-height: 1.6; }
+
+/* Weather location validity status */
+.weather-loc-status {
+  font-size: 9px;
+  line-height: 1.5;
+  min-height: 12px;
+  letter-spacing: 0.5px;
+}
+.weather-loc-status.ok       { color: #7CFC8A; }
+.weather-loc-status.err      { color: #ff8080; }
+.weather-loc-status.checking { color: #ffd080; }
 
 .stepper {
   display: flex;

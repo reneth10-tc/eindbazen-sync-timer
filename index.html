@@ -13,6 +13,12 @@
 <body>
   <!-- Sky / cloud layer -->
   <div class="sky">
+    <div id="starfield" class="starfield" aria-hidden="true"></div>
+    <div class="moon" aria-hidden="true">
+      <span class="moon-crater moon-crater--1"></span>
+      <span class="moon-crater moon-crater--2"></span>
+      <span class="moon-crater moon-crater--3"></span>
+    </div>
     <span class="cloud cloud--1"></span>
     <span class="cloud cloud--2"></span>
     <span class="cloud cloud--3"></span>
@@ -72,6 +78,9 @@
             </div>
           </div>
           <div class="boss-zzz" aria-hidden="true"><span>z</span><span>Z</span><span>z</span></div>
+          <!-- Weather accessories -->
+          <div class="boss-glasses" aria-hidden="true"></div>
+          <div class="boss-sweat" aria-hidden="true"><span></span><span></span><span></span></div>
         </div>
         <div class="boss-torso">
           <div class="boss-shoulder boss-shoulder--left">
@@ -304,6 +313,15 @@
   <!-- Rain container (blue raindrops, separate from confetti so showers don't clobber finish coins) -->
   <div id="rainContainer" class="rain-container" aria-hidden="true"></div>
 
+  <!-- Puddle container (pools on the ground while it's raining) -->
+  <div id="puddleContainer" class="puddle-container" aria-hidden="true"></div>
+
+  <!-- Blowing leaves (windy / storm conditions) -->
+  <div id="leafContainer" class="leaf-container" aria-hidden="true"></div>
+
+  <!-- Lightning flash overlay (thunderstorm scenes) -->
+  <div id="lightning" class="lightning" aria-hidden="true"></div>
+
   <!-- Speech bubble (top-level so it overlays the timer panel during topi visits) -->
   <div class="bubble-layer" aria-hidden="true">
     <div class="speech-bubble speech-bubble--bug">hey a bug</div>
@@ -347,6 +365,23 @@
         <span>Round start to next 5 min</span>
       </label>
 
+      <label class="field toggle">
+        <input type="checkbox" id="weatherToggle" />
+        <span>Weather effects</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Location</span>
+        <input type="text" id="weatherLocation" class="select" style="font-size:9px;padding:8px;" placeholder="City name or 52.37,4.90" />
+        <span id="weatherLocStatus" class="weather-loc-status"></span>
+        <span class="field-help">City name or lat,lon — empty = Amsterdam. Open-Meteo (free, no key).</span>
+      </label>
+
+      <label class="field toggle">
+        <input type="checkbox" id="darkModeToggle" />
+        <span>Dark mode (night sky)</span>
+      </label>
+
       <label class="field">
         <span class="field-label">Slack alert</span>
         <select id="slackMode" class="select">
@@ -375,6 +410,14 @@
             <input type="checkbox" id="fastTopiToggle" />
             <span>Fast topi schedule (5 visits in 60 s)</span>
           </label>
+          <button type="button" id="weatherSunnyHotBtn" class="mini-btn btn-secondary">&#x2600;&#xFE0F; Weather: sunny +28°C</button>
+          <button type="button" id="weatherHeatwaveBtn" class="mini-btn btn-secondary">&#x1F975; Weather: heatwave +35°C</button>
+          <button type="button" id="weatherRainBtn" class="mini-btn btn-secondary">&#x1F327;&#xFE0F; Weather: rain</button>
+          <button type="button" id="weatherStormBtn" class="mini-btn btn-secondary">&#x26C8;&#xFE0F; Weather: thunderstorm</button>
+          <button type="button" id="weatherNightBtn" class="mini-btn btn-secondary">&#x1F319; Weather: night</button>
+          <button type="button" id="weatherWindyBtn" class="mini-btn btn-secondary">&#x1F32C;&#xFE0F; Weather: windy (leaves)</button>
+          <button type="button" id="weatherColdBtn" class="mini-btn btn-secondary">&#x1F976; Weather: cold +1°C</button>
+          <button type="button" id="weatherClearBtn" class="mini-btn btn-secondary">&#x274C; Weather: clear (reset)</button>
         </div>
       </div>
 

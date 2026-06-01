@@ -4,7 +4,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.1.';
+const APP_VERSION = '2.4.';
 const SETTINGS_KEY = 'eindbazen.settings';
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -19,6 +19,9 @@ const defaultSettings = {
   slackMode: 'off', // 'off' | 'manual' | 'auto'
   devMode: false,
   fastTopi: false,
+  weatherEnabled: false,
+  weatherLocation: '', // city name or 'lat,lon'; empty = Amsterdam default
+  darkMode: false,     // force night sky even in daytime
 };
 
 // ---------- Settings ----------
@@ -111,6 +114,14 @@ const tpMinDisplay = $('tpMinDisplay');
 const tpOkBtn = $('tpOkBtn');
 const tpCancelBtn = $('tpCancelBtn');
 const tpStepperBtns = document.querySelectorAll('.time-stepper .stepper-btn');
+const weatherToggle = $('weatherToggle');
+const weatherLocationInput = $('weatherLocation');
+const weatherLocStatus = $('weatherLocStatus');
+const darkModeToggle = $('darkModeToggle');
+const starfield = $('starfield');
+const puddleContainer = $('puddleContainer');
+const lightning = $('lightning');
+const leafContainer = $('leafContainer');
 
 // ---------- Timer state machine ----------
 const state = {
@@ -137,6 +148,15 @@ const state = {
   teaTimeHideHandle: null,
   pipeHandles: [],
   pipeInFlight: false,
+  // Weather
+  weather: null,          // last fetched/applied weather object
+  weatherRain: false,     // true when weather drives continuous rain
+  weatherRainHandle: null, // setInterval ID for continuous rain loop
+  resolvedCoords: null,    // {lat,lon} resolved from a city name (cached)
+  puddlesShown: false,     // whether puddles are currently on the ground
+  lightningHandle: null,   // setTimeout ID for the next lightning flash
+  leafHandle: null,        // setInterval ID for the blowing-leaves spawner
+  leafWind: null,          // current wind bucket ('low'|'mid'|'high') for leaves
 };
 
 const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
@@ -260,6 +280,10 @@ function startTimer({ endAt = null, silent = false, fromSharedLink = false } = {
   scheduleRainShowers();
   scheduleTeaTime();
   scheduleTick();
+  // Re-apply cached weather so it overrides random rain schedule if currently raining.
+  if (settings.weatherEnabled && state.weather && !state.fromSharedLink) {
+    applyWeather(state.weather);
+  }
 }
 
 function scheduleTick() {
@@ -664,6 +688,34 @@ const sfx = {
     beep(1100, 0.09, 'square', 0.05, 0.18);
     beep(1320, 0.12, 'square', 0.04, 0.28);
   },
+  thunder() {
+    // Synthesized thunderclap: a short bright crack followed by a low,
+    // slowly-decaying noise rumble. Built from a filtered noise buffer.
+    try {
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+      const dur = 2.2;
+      // White-noise buffer
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+      const ch = buffer.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      // Low-pass sweep: starts brighter (the crack), rolls down into a rumble.
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(1600, now);
+      lp.frequency.exponentialRampToValueAtTime(180, now + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.32, now + 0.04); // sharp attack
+      g.gain.exponentialRampToValueAtTime(0.12, now + 0.5);  // settle
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur); // long tail
+      src.connect(lp).connect(g).connect(ctx.destination);
+      src.start(now);
+      src.stop(now + dur + 0.05);
+    } catch (_) { /* audio unavailable — ignore */ }
+  },
 };
 
 // ---------- IDE typing animation (runs while boss is at laptop) ----------
@@ -905,6 +957,8 @@ function cancelRsi() {
 // ---------- Rain shower joke ----------
 
 function scheduleRainShowers() {
+  // When weather is driving continuous rain, skip the random shower schedule.
+  if (state.weatherRain) return;
   cancelRain();
   const now = Date.now();
   const windowMs = state.endAt - now;
@@ -919,7 +973,8 @@ function scheduleRainShowers() {
 }
 
 function runRainShower() {
-  if (state.phase !== 'running') return;
+  // Weather rain runs regardless of timer phase; random showers need a running session.
+  if (state.phase !== 'running' && !state.weatherRain) return;
   const clouds = document.querySelectorAll('.cloud');
   if (!clouds.length) return;
   clouds.forEach((cloud) => {
@@ -947,6 +1002,8 @@ function runRainShower() {
 function cancelRain() {
   state.rainHandles.forEach((h) => clearTimeout(h));
   state.rainHandles = [];
+  // Stop weather-driven continuous rain too (used by reset/finish).
+  if (typeof stopWeatherRain === 'function') stopWeatherRain();
   if (rainContainer) rainContainer.innerHTML = '';
 }
 
@@ -1208,6 +1265,373 @@ function cancelTopi() {
   }
 }
 
+// ---------- Weather module ----------
+// Uses Open-Meteo (free, no API key, CORS-enabled — browser calls it directly).
+// Fetches on enable / session start, refreshes every 20 min.
+// Shared links freeze the host's weather snapshot into the URL hash.
+
+const WEATHER_REFRESH_MS = 20 * 60 * 1000;
+const DEFAULT_COORDS = { lat: 52.37, lon: 4.90 }; // Amsterdam
+
+// WMO weather code → simplified condition
+function wmoToCondition(code) {
+  if (code === 0) return 'clear';
+  if (code <= 3 || code === 45 || code === 48) return 'cloudy';
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+  if (code >= 95) return 'thunder'; // 95–99 = thunderstorm (lightning + thunder)
+  return 'cloudy'; // 71–86 = snow → treat as cloudy (snow not in scope)
+}
+
+// Parse a raw "lat,lon" string. Returns {lat,lon} or null if not coord-shaped.
+function parseCoords(str) {
+  if (!str || !str.trim()) return null;
+  const parts = str.split(',').map((s) => parseFloat(s.trim()));
+  if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])
+      && Math.abs(parts[0]) <= 90 && Math.abs(parts[1]) <= 180) {
+    return { lat: parts[0], lon: parts[1] };
+  }
+  return null;
+}
+
+// Resolve a city name to coordinates via Open-Meteo's free geocoding API.
+// Returns { lat, lon, label } or null if the place is unknown.
+async function geocodeCity(name) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Geocoding ${res.status}`);
+  const data = await res.json();
+  if (!data.results || !data.results.length) return null;
+  const r = data.results[0];
+  const label = [r.name, r.admin1, r.country].filter(Boolean).join(', ');
+  return { lat: r.latitude, lon: r.longitude, label };
+}
+
+// Resolve the configured location (coords or city name) to {lat,lon}.
+// Caches the result of a city lookup in state.resolvedCoords.
+async function resolveLocation() {
+  const raw = settings.weatherLocation;
+  if (!raw || !raw.trim()) return DEFAULT_COORDS;
+  const coords = parseCoords(raw);
+  if (coords) return coords;
+  // It's a city name — use cache if it matches, else geocode.
+  if (state.resolvedCoords && state.resolvedCoords.query === raw) {
+    return { lat: state.resolvedCoords.lat, lon: state.resolvedCoords.lon };
+  }
+  const geo = await geocodeCity(raw);
+  if (!geo) throw new Error('Unknown location');
+  state.resolvedCoords = { query: raw, lat: geo.lat, lon: geo.lon, label: geo.label };
+  return { lat: geo.lat, lon: geo.lon };
+}
+
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,precipitation,weather_code,wind_speed_10m,is_day&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Weather API ${res.status}`);
+  const data = await res.json();
+  const c = data.current;
+  return {
+    tempC:         Math.round(c.temperature_2m),
+    precipitation: c.precipitation,
+    code:          c.weather_code,
+    windKmh:       Math.round(c.wind_speed_10m),
+    isDay:         c.is_day === 1,
+    condition:     wmoToCondition(c.weather_code),
+  };
+}
+
+const SKY_DAY_CLEAR   = { top: '#5c94fc', bottom: '#8fbfff' };
+const SKY_DAY_CLOUDY  = { top: '#7a8fa8', bottom: '#a0b4c8' };
+const SKY_NIGHT_CLEAR = { top: '#0a0a2e', bottom: '#1a2a5e' };
+const SKY_NIGHT_CLOUD = { top: '#141422', bottom: '#242436' };
+
+function applyWeather(w) {
+  if (!w) return;
+  state.weather = w;
+
+  // Night when the weather says so OR dark mode is forced on.
+  const night = !w.isDay || settings.darkMode;
+
+  // Sky colours
+  let palette;
+  if (!night) {
+    palette = w.condition === 'clear' ? SKY_DAY_CLEAR : SKY_DAY_CLOUDY;
+  } else {
+    palette = w.condition === 'clear' ? SKY_NIGHT_CLEAR : SKY_NIGHT_CLOUD;
+  }
+  const root = document.documentElement;
+  root.style.setProperty('--sky-top',    palette.top);
+  root.style.setProperty('--sky-bottom', palette.bottom);
+
+  // Night class (stars, moon, lit castle windows, dimmed scene)
+  setNightMode(night);
+
+  // Overcast class (grey clouds) — rain, thunder, or cloudy at night
+  const skyEl = document.querySelector('.sky');
+  if (skyEl) {
+    skyEl.classList.toggle('is-overcast',
+      w.condition === 'rain' || w.condition === 'thunder' ||
+      (w.condition === 'cloudy' && night));
+    // Thunderstorm gets an extra-dark, ominous tint.
+    skyEl.classList.toggle('is-thunder', w.condition === 'thunder');
+  }
+
+  // Cloud drift speed (wind)
+  let speedScale = 1;
+  if (w.windKmh > 70)      speedScale = 3.5;
+  else if (w.windKmh > 40) speedScale = 2.2;
+  else if (w.windKmh > 20) speedScale = 1.5;
+  root.style.setProperty('--cloud-speed-scale', String(speedScale));
+
+  // Continuous rain — rain + thunderstorms bring rain.
+  const raining = w.condition === 'rain' || w.condition === 'thunder';
+  if (raining) {
+    startWeatherRain();
+    showPuddles();
+  } else {
+    stopWeatherRain();
+    hidePuddles();
+  }
+
+  // Wind: blowing leaves whenever it's genuinely windy (>25 km/h), independent
+  // of precipitation — a "storm"/windy day. Stronger wind = more leaves.
+  if (w.windKmh > 25) {
+    startLeaves(w.windKmh);
+  } else {
+    stopLeaves();
+  }
+
+  // Lightning + thunder only during actual thunderstorms.
+  if (w.condition === 'thunder') {
+    startLightning();
+  } else {
+    stopLightning();
+  }
+
+  // Endboss accessories — no shades at night / in dark mode.
+  const sunny  = !night && w.condition === 'clear' && w.tempC > 25;
+  endboss.classList.toggle('is-cool-shades', sunny);
+  endboss.classList.toggle('is-sweating',    w.tempC > 30);
+  endboss.classList.toggle('is-shivering',   w.tempC <= 2);
+}
+
+function clearWeather() {
+  stopWeatherRain();
+  state.weather = null;
+
+  const root = document.documentElement;
+  root.style.removeProperty('--sky-top');
+  root.style.removeProperty('--sky-bottom');
+  root.style.setProperty('--cloud-speed-scale', '1');
+
+  // Respect a standalone dark-mode toggle even when weather is cleared.
+  setNightMode(settings.darkMode);
+  const skyEl = document.querySelector('.sky');
+  if (skyEl) skyEl.classList.remove('is-overcast', 'is-thunder');
+  hidePuddles();
+  stopLightning();
+  stopLeaves();
+
+  endboss.classList.remove('is-cool-shades', 'is-sweating', 'is-shivering');
+}
+
+// ---------- Night mode + starfield ----------
+function buildStarfield() {
+  if (!starfield || starfield.childElementCount) return; // build once
+  const STAR_COUNT = 70;
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = 1 + Math.random() * 2;
+    s.style.width = s.style.height = size + 'px';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 62 + '%'; // keep stars in the upper sky
+    s.style.animationDuration = (2 + Math.random() * 3) + 's';
+    s.style.animationDelay = (Math.random() * 3) + 's';
+    starfield.appendChild(s);
+  }
+}
+
+function setNightMode(on) {
+  if (on) buildStarfield();
+  document.body.classList.toggle('is-night', !!on);
+}
+
+// ---------- Rain puddles ----------
+function showPuddles() {
+  if (!puddleContainer || state.puddlesShown) return;
+  state.puddlesShown = true;
+  const count = 5 + Math.floor(Math.random() * 4); // 5–8 puddles
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'puddle';
+    const width = 50 + Math.random() * 120;
+    p.style.width = width + 'px';
+    p.style.left = Math.random() * 92 + 'vw';
+    p.style.animationDelay = (Math.random() * 1.5) + 's';
+    p.style.opacity = '';
+    puddleContainer.appendChild(p);
+  }
+}
+
+function hidePuddles() {
+  if (!puddleContainer) return;
+  state.puddlesShown = false;
+  puddleContainer.innerHTML = '';
+}
+
+// ---------- Continuous weather rain ----------
+// Distinct from the random "rain shower" joke: this is a smooth, full-width
+// downpour. Drops spawn in a steady trickle across the whole sky and each one
+// removes itself when its fall animation ends — so there's no periodic
+// clear-everything flush (which caused the visible stutter when rain started).
+function spawnRaindropBurst(count) {
+  if (!rainContainer) return;
+  const vw = window.innerWidth;
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement('div');
+    d.className = 'raindrop';
+    d.style.left = (Math.random() * vw) + 'px';
+    d.style.top = '-20px';
+    const dur = 0.7 + Math.random() * 0.7;
+    d.style.animationDuration = dur + 's';
+    // Clean up exactly when this drop finishes falling — no mass flush.
+    d.addEventListener('animationend', () => d.remove());
+    rainContainer.appendChild(d);
+  }
+}
+
+function startWeatherRain() {
+  if (state.weatherRain) return; // already raining
+  state.weatherRain = true;
+  // Cancel any random joke-shower timers and clear leftover drops for a clean start.
+  state.rainHandles.forEach((h) => clearTimeout(h));
+  state.rainHandles = [];
+  if (rainContainer) rainContainer.innerHTML = '';
+  // Pre-seed staggered drops so the screen fills naturally instead of popping in.
+  spawnRaindropBurst(40);
+  // Steady trickle thereafter.
+  state.weatherRainHandle = setInterval(() => spawnRaindropBurst(12), 180);
+}
+
+function stopWeatherRain() {
+  if (state.weatherRainHandle) {
+    clearInterval(state.weatherRainHandle);
+    state.weatherRainHandle = null;
+  }
+  state.weatherRain = false;
+  // Let in-flight drops finish their fall naturally (they self-remove);
+  // nothing to flush here, avoiding an abrupt disappearance.
+}
+
+// ---------- Wind: blowing leaves ----------
+function startLeaves(windKmh) {
+  if (!leafContainer) return;
+  // Scale spawn rate + drift speed with wind strength.
+  const intervalMs = windKmh > 60 ? 550 : windKmh > 40 ? 850 : 1300;
+  if (state.leafHandle && state.leafWind === bucketWind(windKmh)) return; // unchanged
+  stopLeaves();
+  state.leafWind = bucketWind(windKmh);
+  const spawn = () => {
+    if (!leafContainer) return;
+    const leaf = document.createElement('div');
+    leaf.className = 'leaf leaf--' + (1 + Math.floor(Math.random() * 3));
+    // Start off the left edge at a random height in the upper-middle band.
+    leaf.style.top = (5 + Math.random() * 55) + 'vh';
+    const dur = windKmh > 60 ? (2.5 + Math.random() * 1.5)
+              : windKmh > 40 ? (3.5 + Math.random() * 2)
+              : (5 + Math.random() * 2.5);
+    leaf.style.animationDuration = dur + 's, ' + (0.6 + Math.random() * 0.8) + 's';
+    leaf.addEventListener('animationend', (e) => {
+      // The drift (first) animation finishing means the leaf has crossed the screen.
+      if (e.animationName === 'leafBlow') leaf.remove();
+    });
+    leafContainer.appendChild(leaf);
+  };
+  spawn();
+  state.leafHandle = setInterval(spawn, intervalMs);
+}
+
+function bucketWind(w) {
+  return w > 60 ? 'high' : w > 40 ? 'mid' : 'low';
+}
+
+function stopLeaves() {
+  if (state.leafHandle) { clearInterval(state.leafHandle); state.leafHandle = null; }
+  state.leafWind = null;
+  if (leafContainer) leafContainer.innerHTML = '';
+}
+
+// ---------- Lightning + thunder (thunderstorm scenes) ----------
+function flashLightning() {
+  if (!lightning) return;
+  // A flash is usually a quick double-blink. Cycle the class to restart the anim.
+  lightning.classList.remove('flashing');
+  void lightning.offsetWidth; // force reflow
+  lightning.classList.add('flashing');
+  // Thunder follows the flash by a short, slightly random delay (sound lag).
+  const thunderDelay = 250 + Math.random() * 600;
+  setTimeout(() => {
+    if (settings.effects) sfx.thunder();
+  }, thunderDelay);
+}
+
+function scheduleNextLightning() {
+  // Random gap between strikes: 4–12 s.
+  const delay = 4000 + Math.random() * 8000;
+  state.lightningHandle = setTimeout(() => {
+    flashLightning();
+    scheduleNextLightning();
+  }, delay);
+}
+
+function startLightning() {
+  if (state.lightningHandle) return; // already running
+  // First strike comes quickly so the storm reads immediately.
+  state.lightningHandle = setTimeout(() => {
+    flashLightning();
+    scheduleNextLightning();
+  }, 600);
+}
+
+function stopLightning() {
+  if (state.lightningHandle) { clearTimeout(state.lightningHandle); state.lightningHandle = null; }
+  if (lightning) lightning.classList.remove('flashing');
+}
+
+let weatherRefreshHandle = null;
+
+function stopWeather() {
+  if (weatherRefreshHandle) { clearInterval(weatherRefreshHandle); weatherRefreshHandle = null; }
+  clearWeather();
+}
+
+async function startWeather() {
+  if (!settings.weatherEnabled) return;
+  // Shared-link viewers see a snapshot from the URL, never live-fetch.
+  if (state.fromSharedLink) return;
+
+  try {
+    const { lat, lon } = await resolveLocation();
+    const w = await fetchWeather(lat, lon);
+    applyWeather(w);
+    console.log('[weather] fetched:', w);
+  } catch (err) {
+    console.warn('[weather] fetch failed:', err);
+  }
+
+  if (weatherRefreshHandle) clearInterval(weatherRefreshHandle);
+  weatherRefreshHandle = setInterval(async () => {
+    if (!settings.weatherEnabled) return;
+    try {
+      const { lat, lon } = await resolveLocation();
+      applyWeather(await fetchWeather(lat, lon));
+    } catch (err) {
+      console.warn('[weather] refresh failed:', err);
+    }
+  }, WEATHER_REFRESH_MS);
+}
+
 // ---------- Shareable session link ----------
 // Encodes { endAt, durationMin } in the URL hash. Because the timer runs off
 // an absolute endAt timestamp, any client opening the link independently
@@ -1220,7 +1644,18 @@ function parseSharedSession() {
   if (!e || !d) return null;
   // Allow any positive integer up to 24h — time-picker sessions aren't bound to 30-min steps.
   if (!Number.isInteger(d) || d < 1 || d > 1440) return null;
-  return { endAt: e, durationMin: d };
+  const result = { endAt: e, durationMin: d };
+  // Optional weather snapshot: &w=tempC,code,windKmh,isDay(0|1)
+  const wParam = params.get('w');
+  if (wParam) {
+    const parts = wParam.split(',').map(Number);
+    if (parts.length === 4 && parts.every(Number.isFinite)) {
+      const [tempC, code, windKmh, isDayInt] = parts;
+      result.weatherSnapshot = { tempC, code, windKmh,
+        isDay: isDayInt === 1, condition: wmoToCondition(code), precipitation: 0 };
+    }
+  }
+  return result;
 }
 
 function clearSessionHash() {
@@ -1232,6 +1667,11 @@ function clearSessionHash() {
 async function copyShareLink() {
   const url = new URL(window.location.href);
   url.hash = `e=${state.endAt}&d=${settings.durationMin}`;
+  // Freeze current weather into the link so shared viewers see the same scene.
+  if (settings.weatherEnabled && state.weather) {
+    const w = state.weather;
+    url.hash += `&w=${w.tempC},${w.code},${w.windKmh},${w.isDay ? 1 : 0}`;
+  }
   const link = url.toString();
   try {
     await navigator.clipboard.writeText(link);
@@ -1312,6 +1752,10 @@ function openSettings() {
   slackModeSel.value = settings.slackMode;
   if (devModeToggle) devModeToggle.checked = settings.devMode;
   if (fastTopiToggle) fastTopiToggle.checked = settings.fastTopi;
+  if (weatherToggle) weatherToggle.checked = settings.weatherEnabled;
+  if (weatherLocationInput) weatherLocationInput.value = settings.weatherLocation;
+  if (darkModeToggle) darkModeToggle.checked = settings.darkMode;
+  validateLocation(settings.weatherLocation);
   applyDevMode();
   updateStepperDisabled();
   document.getElementById('appVersion').textContent = APP_VERSION;
@@ -1372,6 +1816,93 @@ slackModeSel.addEventListener('change', () => {
   settings.slackMode = slackModeSel.value;
   saveSettings(settings);
 });
+
+if (weatherToggle) {
+  weatherToggle.addEventListener('change', () => {
+    settings.weatherEnabled = weatherToggle.checked;
+    saveSettings(settings);
+    if (settings.weatherEnabled) {
+      startWeather();
+    } else {
+      stopWeather();
+    }
+  });
+}
+
+// Validate the location field and reflect status (green check / error / checking).
+// Token guards against out-of-order async results when typing quickly.
+let locValidateToken = 0;
+async function validateLocation(raw) {
+  if (!weatherLocStatus) return;
+  const value = (raw || '').trim();
+  weatherLocStatus.classList.remove('ok', 'err', 'checking');
+
+  if (!value) {
+    weatherLocStatus.textContent = '✓ Amsterdam (default)';
+    weatherLocStatus.classList.add('ok');
+    return;
+  }
+  const coords = parseCoords(value);
+  if (coords) {
+    weatherLocStatus.textContent = `✓ ${coords.lat.toFixed(2)}, ${coords.lon.toFixed(2)}`;
+    weatherLocStatus.classList.add('ok');
+    return;
+  }
+  // City name — geocode to verify it exists.
+  const token = ++locValidateToken;
+  weatherLocStatus.textContent = '… checking location';
+  weatherLocStatus.classList.add('checking');
+  try {
+    const geo = await geocodeCity(value);
+    if (token !== locValidateToken) return; // a newer check superseded us
+    weatherLocStatus.classList.remove('checking');
+    if (geo) {
+      state.resolvedCoords = { query: value, lat: geo.lat, lon: geo.lon, label: geo.label };
+      weatherLocStatus.textContent = `✓ ${geo.label}`;
+      weatherLocStatus.classList.add('ok');
+    } else {
+      weatherLocStatus.textContent = '✗ Unknown location';
+      weatherLocStatus.classList.add('err');
+    }
+  } catch (err) {
+    if (token !== locValidateToken) return;
+    weatherLocStatus.classList.remove('checking');
+    weatherLocStatus.textContent = '✗ Could not check location';
+    weatherLocStatus.classList.add('err');
+  }
+}
+
+if (weatherLocationInput) {
+  // Live validation as the user types (debounced).
+  let locTypeHandle = null;
+  weatherLocationInput.addEventListener('input', () => {
+    if (locTypeHandle) clearTimeout(locTypeHandle);
+    locTypeHandle = setTimeout(() => validateLocation(weatherLocationInput.value), 450);
+  });
+  weatherLocationInput.addEventListener('change', () => {
+    settings.weatherLocation = weatherLocationInput.value.trim();
+    state.resolvedCoords = null; // force re-resolve for the new value
+    saveSettings(settings);
+    validateLocation(settings.weatherLocation);
+    if (settings.weatherEnabled) {
+      stopWeather();
+      startWeather();
+    }
+  });
+}
+
+if (darkModeToggle) {
+  darkModeToggle.addEventListener('change', () => {
+    settings.darkMode = darkModeToggle.checked;
+    saveSettings(settings);
+    // Re-apply current weather so palette/stars/moon update immediately.
+    if (state.weather) {
+      applyWeather(state.weather);
+    } else {
+      setNightMode(settings.darkMode);
+    }
+  });
+}
 
 // ---------- Dev controls ----------
 function applyDevMode() {
@@ -1480,6 +2011,40 @@ if (fastTopiToggle) {
     saveSettings(settings);
   });
 }
+
+// Dev weather triggers — force fake weather objects for visual testing
+function devWeather(fakeWeather) {
+  closeSettings();
+  setTimeout(() => applyWeather(fakeWeather), 80);
+}
+
+const weatherSunnyHotBtn  = $('weatherSunnyHotBtn');
+const weatherHeatwaveBtn  = $('weatherHeatwaveBtn');
+const weatherRainBtn2     = $('weatherRainBtn');
+const weatherStormBtn     = $('weatherStormBtn');
+const weatherNightBtn     = $('weatherNightBtn');
+const weatherWindyBtn     = $('weatherWindyBtn');
+const weatherColdBtn      = $('weatherColdBtn');
+const weatherClearBtn     = $('weatherClearBtn');
+
+if (weatherSunnyHotBtn) weatherSunnyHotBtn.addEventListener('click', () =>
+  devWeather({ tempC: 28, code: 0, windKmh: 10, isDay: true,  condition: 'clear',  precipitation: 0 }));
+if (weatherHeatwaveBtn) weatherHeatwaveBtn.addEventListener('click', () =>
+  devWeather({ tempC: 35, code: 0, windKmh: 6,  isDay: true,  condition: 'clear',  precipitation: 0 }));
+if (weatherRainBtn2)    weatherRainBtn2.addEventListener('click',    () =>
+  devWeather({ tempC: 14, code: 61, windKmh: 25, isDay: true,  condition: 'rain',   precipitation: 2.5 }));
+if (weatherStormBtn)    weatherStormBtn.addEventListener('click',    () =>
+  devWeather({ tempC: 17, code: 95, windKmh: 45, isDay: true,  condition: 'thunder', precipitation: 5 }));
+if (weatherNightBtn)    weatherNightBtn.addEventListener('click',    () =>
+  devWeather({ tempC: 18, code: 0, windKmh: 8,  isDay: false, condition: 'clear',  precipitation: 0 }));
+if (weatherWindyBtn)    weatherWindyBtn.addEventListener('click',    () =>
+  devWeather({ tempC: 16, code: 2, windKmh: 55, isDay: true,  condition: 'cloudy', precipitation: 0 }));
+if (weatherColdBtn)     weatherColdBtn.addEventListener('click',     () =>
+  devWeather({ tempC: 1,  code: 2, windKmh: 12, isDay: true,  condition: 'cloudy', precipitation: 0 }));
+if (weatherClearBtn)    weatherClearBtn.addEventListener('click',    () => {
+  closeSettings();
+  setTimeout(() => clearWeather(), 80);
+});
 
 settingsBtn.addEventListener('click', openSettings);
 settingsCloseBtn.addEventListener('click', closeSettings);
@@ -1608,6 +2173,17 @@ if (shared) {
   settings.durationMin = shared.durationMin;
   // silent: skip roar/flash since the session is already mid-flight for us.
   startTimer({ endAt: shared.endAt, silent: true, fromSharedLink: true });
+  // Apply frozen weather snapshot if the host encoded one in the link.
+  if (shared.weatherSnapshot) {
+    applyWeather(shared.weatherSnapshot);
+  }
 } else {
   renderIdle();
+  // Start live weather if the user had it enabled.
+  if (settings.weatherEnabled) {
+    startWeather();
+  } else if (settings.darkMode) {
+    // Dark mode is independent of weather — apply the night sky on its own.
+    setNightMode(true);
+  }
 }
