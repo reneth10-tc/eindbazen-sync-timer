@@ -1158,9 +1158,10 @@ body:has(.endboss.has-bug) .ide-bug-error {
   50%      { transform: rotate(-22deg) translateY(8px); }
 }
 .endboss[data-state="working"] .boss-mouth {
-  width: 60px;
-  height: 14px;
-  border-radius: 6px 6px 20px 20px;
+  width: 84px;
+  height: 22px;
+  bottom: 10px;
+  border-radius: 8px 8px 26px 26px;
 }
 
 /* --- State: tired (after halfway) --- */
