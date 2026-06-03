@@ -75,7 +75,12 @@ body {
   background: #fff;
   border-radius: 50px;
   animation: cloudDrift linear infinite;
+  transition: opacity 1.5s ease;
 }
+
+/* Clear sky → no clouds. When the live weather reports a clear sky (WMO code 0)
+   the scene fades its clouds out so the blue (or starry) sky is unbroken. */
+.sky.is-clear .cloud { opacity: 0; }
 .cloud::before,
 .cloud::after {
   content: '';
@@ -142,6 +147,22 @@ body.is-night .cloud,
 body.is-night .cloud::before,
 body.is-night .cloud::after { background: #3a3f4a; }
 
+/* --- Night-mode character cohesion ---
+   At night the boss, topi and pipe characters take on a cooler, dimmer
+   "moonlit" tint so they belong to the same scene as the dimmed castle and
+   sky, instead of staying in full daytime colour. The laptop is a sibling of
+   .boss-body (not a child), so the boss filter never touches the IDE screen —
+   it stays fully readable. Transitions make the day/night swap ease smoothly. */
+.boss-body, .topi, .pipe-character,
+.pipe-rim, .pipe-shaft { transition: filter 1.2s ease; }
+body.is-night .boss-body      { filter: brightness(0.82) saturate(0.72) hue-rotate(-10deg); }
+body.is-night .topi           { filter: brightness(0.84) saturate(0.70) hue-rotate(-10deg); }
+body.is-night .pipe-character { filter: brightness(0.86) saturate(0.78) hue-rotate(-8deg); }
+/* Green pipe bodies — dimmed at night too (targeted on the rim/shaft so the
+   filter doesn't compound with the .pipe-character tint above). */
+body.is-night .pipe-rim,
+body.is-night .pipe-shaft     { filter: brightness(0.74) saturate(0.72) hue-rotate(-6deg); }
+
 /* Starfield — populated by JS, revealed at night */
 .starfield {
   position: absolute;
@@ -163,6 +184,35 @@ body.is-night .starfield { opacity: 1; }
   0%, 100% { opacity: 0.25; }
   50%      { opacity: 1; }
 }
+
+/* Sun — shown in daytime clear or partly-cloudy weather (mirror of the moon).
+   The disc sits on top of a slowly-rotating ::before whose conic-gradient
+   wedges poke out around the disc as triangular rays. */
+.sun {
+  position: absolute;
+  top: 9%;
+  right: 11%;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  z-index: 0;
+  background: radial-gradient(circle at 40% 36%, #fff3b0 0%, #ffd23f 55%, #ff9e1f 100%);
+  box-shadow: 0 0 30px 10px rgba(255, 200, 60, 0.5);
+  opacity: 0;
+  transition: opacity 1.2s;
+  pointer-events: none;
+}
+.sun::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 196, 50, 0.85) 0deg 6deg, transparent 6deg 21deg);
+  z-index: -1;
+  animation: sunSpin 60s linear infinite;
+}
+@keyframes sunSpin { to { transform: rotate(360deg); } }
+body.is-sunny .sun { opacity: 1; }
 
 /* Moon */
 .moon {
@@ -749,23 +799,28 @@ body.screen-shake { animation: screenShake 0.45s steps(6); }
   left: 50%;
   transform: translateX(-50%);
   width: 150px;
-  height: 80px;
+  height: 66px;
   background: var(--boss-skin-light);
   border: 5px solid #000;
-  border-radius: 60px 60px 40px 40px;
-  box-shadow: inset -8px -6px 0 var(--boss-skin-dark);
+  /* Flatter top so the muzzle reads as a snout projecting from the face,
+     rather than a domed little head/mushroom figure. */
+  border-radius: 34px 34px 52px 52px;
+  box-shadow: inset -8px -6px 0 var(--boss-skin-dark),
+              inset 0 10px 0 -4px var(--boss-skin-dark); /* bridge shading up to the face */
 }
 
+/* Small, low-set, outward-angled nostrils — comma-like so they read as a nose,
+   not a second pair of eyes. */
 .boss-nostril {
   position: absolute;
-  top: 14px;
-  width: 12px;
-  height: 14px;
+  top: 24px;
+  width: 14px;
+  height: 9px;
   background: #000;
-  border-radius: 50%;
+  border-radius: 60% 60% 50% 50%;
 }
-.boss-nostril--left  { left: 30px; }
-.boss-nostril--right { right: 30px; }
+.boss-nostril--left  { left: 34px; transform: rotate(-22deg); }
+.boss-nostril--right { right: 34px; transform: rotate(22deg); }
 
 .boss-mouth {
   position: absolute;
@@ -1308,14 +1363,22 @@ body:has(.endboss.has-bug) .ide-bug-error {
 
 .endboss.is-sweating .boss-sweat { opacity: 1; }
 
-/* --- Shivering (.is-shivering) — additive, overrides breathe animation --- */
+/* --- Frozen (.is-shivering) — additive, overrides breathe animation ---
+   Reads as "a bit frozen": a pale, desaturated icy tint with a cold blue
+   frost glow, and only a stiff, occasional shudder instead of constant shaking. */
 .endboss.is-shivering {
-  animation: bossShiver 0.14s ease-in-out infinite !important;
+  animation: bossFrozen 3.2s ease-in-out infinite !important;
+  filter: saturate(0.5) brightness(1.12) hue-rotate(-8deg)
+          drop-shadow(0 0 7px rgba(150, 210, 255, 0.85));
+  transition: filter 1s ease;
 }
-@keyframes bossShiver {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  25%       { transform: translateX(-3px) rotate(-0.8deg); }
-  75%       { transform: translateX(3px)  rotate(0.8deg); }
+@keyframes bossFrozen {
+  /* Stiff most of the time, with a brief tiny shiver burst partway through. */
+  0%, 14%, 30%, 100% { transform: translateX(0) rotate(0); }
+  17% { transform: translateX(-1.5px) rotate(-0.35deg); }
+  20% { transform: translateX(1.5px)  rotate(0.35deg); }
+  23% { transform: translateX(-1px)   rotate(-0.2deg); }
+  26% { transform: translateX(1px)    rotate(0.2deg); }
 }
 
 /* ============================================================
@@ -1347,6 +1410,20 @@ body:has(.endboss.has-bug) .ide-bug-error {
   0%, 100% { transform: translateY(0) scale(1); }
   50%      { transform: translateY(-20px) scale(1.05); }
 }
+
+.teams-btn {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  z-index: 90;
+  background: #5059c9;
+  color: #fff;
+  white-space: nowrap;
+}
+.teams-btn:hover { transform: translate(-50%, -2px); box-shadow: 6px 6px 0 #000; }
+.teams-btn:active { transform: translate(-50%, 2px); box-shadow: 2px 2px 0 #000; }
+.teams-btn.hidden { display: none; }
 
 .slack-area { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .slack-btn {
@@ -1382,6 +1459,53 @@ body:has(.endboss.has-bug) .ide-bug-error {
 @keyframes coinFall {
   0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
+}
+
+/* Colourful confetti pieces — mixed in with the coins at finish. They sway
+   side-to-side (per-piece --sway distance) while tumbling down. */
+.confetti-piece {
+  position: absolute;
+  top: -30px;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  animation: confettiFall linear forwards;
+}
+.confetti-piece--ribbon { width: 7px; height: 18px; border-radius: 2px; }
+@keyframes confettiFall {
+  0%   { transform: translate(0, 0) rotate(0deg);            opacity: 1; }
+  50%  { transform: translate(var(--sway), 55vh) rotate(360deg); }
+  100% { transform: translate(0, 112vh) rotate(720deg);     opacity: 0.85; }
+}
+
+/* Arcade score popup shown under the finish headline. */
+.finish-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.finish-score.hidden { display: none; }
+.finish-score-line {
+  font-family: var(--pixel-font);
+  font-size: clamp(16px, 3.4vw, 32px);
+  color: #5cff6b;
+  text-shadow: 3px 3px 0 #000, 6px 6px 0 #176b22;
+  letter-spacing: 2px;
+}
+.finish-score-xp {
+  font-family: var(--pixel-font);
+  font-size: clamp(8px, 1.6vw, 13px);
+  color: var(--coin-gold);
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 1px;
+}
+.finish-score.pop { animation: scorePop 0.5s cubic-bezier(0.18, 1.4, 0.4, 1) both; }
+@keyframes scorePop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Rain shower (blue raindrops, triggered mid-session) */

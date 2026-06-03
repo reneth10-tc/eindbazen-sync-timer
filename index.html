@@ -14,6 +14,7 @@
   <!-- Sky / cloud layer -->
   <div class="sky">
     <div id="starfield" class="starfield" aria-hidden="true"></div>
+    <div class="sun" aria-hidden="true"></div>
     <div class="moon" aria-hidden="true">
       <span class="moon-crater moon-crater--1"></span>
       <span class="moon-crater moon-crater--2"></span>
@@ -300,12 +301,17 @@
   <!-- Finish banner -->
   <div id="finishBanner" class="finish-banner hidden" role="alert">
     <div class="finish-text">CHECK&#8209;IN&nbsp;TIME!</div>
+    <div id="finishScore" class="finish-score" aria-hidden="true"></div>
     <div id="slackArea" class="slack-area hidden">
       <button id="slackBtn" class="mini-btn slack-btn" type="button">Alert Slack</button>
       <span id="slackStatus" class="slack-status"></span>
     </div>
     <button id="dismissFinishBtn" class="mini-btn" type="button">Dismiss</button>
   </div>
+
+  <!-- Teams meeting button — shown once the finish banner is dismissed (deploy state),
+       hidden again when a new session starts. -->
+  <button id="teamsBtn" class="mini-btn teams-btn hidden" type="button">&#x1F4F9;&nbsp;Start Teams meeting</button>
 
   <!-- Confetti container -->
   <div id="confetti" class="confetti" aria-hidden="true"></div>
@@ -368,6 +374,11 @@
       <label class="field toggle">
         <input type="checkbox" id="weatherToggle" />
         <span>Weather effects</span>
+      </label>
+
+      <label class="field toggle">
+        <input type="checkbox" id="weatherSoundsToggle" />
+        <span>Weather sounds</span>
       </label>
 
       <label class="field">
@@ -452,6 +463,7 @@
     </form>
   </dialog>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

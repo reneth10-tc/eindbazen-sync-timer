@@ -20,6 +20,7 @@ const defaultSettings = {
   devMode: false,
   fastTopi: false,
   weatherEnabled: false,
+  weatherSoundsEnabled: true, // ambient weather SFX (rain/wind/birds) — gated by effects + weatherEnabled
   weatherLocation: '', // city name or 'lat,lon'; empty = Amsterdam default
   darkMode: false,     // force night sky even in daytime
 };
@@ -90,6 +91,7 @@ const ideCaret = $('ideCaret');
 const ideError = $('ideError');
 const finishBanner = $('finishBanner');
 const dismissFinishBtn = $('dismissFinishBtn');
+const teamsBtn = $('teamsBtn');
 const slackArea = $('slackArea');
 const slackBtn = $('slackBtn');
 const slackStatus = $('slackStatus');
@@ -115,7 +117,9 @@ const tpOkBtn = $('tpOkBtn');
 const tpCancelBtn = $('tpCancelBtn');
 const tpStepperBtns = document.querySelectorAll('.time-stepper .stepper-btn');
 const weatherToggle = $('weatherToggle');
+const weatherSoundsToggle = $('weatherSoundsToggle');
 const weatherLocationInput = $('weatherLocation');
+const finishScore = $('finishScore');
 const weatherLocStatus = $('weatherLocStatus');
 const darkModeToggle = $('darkModeToggle');
 const starfield = $('starfield');
@@ -157,6 +161,7 @@ const state = {
   lightningHandle: null,   // setTimeout ID for the next lightning flash
   leafHandle: null,        // setInterval ID for the blowing-leaves spawner
   leafWind: null,          // current wind bucket ('low'|'mid'|'high') for leaves
+  weatherAmbienceHandle: null, // setTimeout ID for the next random weather ambience sound
 };
 
 const alarmAudio = new Audio('assets/sounds/level-complete.mp3');
@@ -220,6 +225,7 @@ function renderTime(ms) {
 
 function startTimer({ endAt = null, silent = false, fromSharedLink = false } = {}) {
   if (state.phase === 'deploying') exitDeployState();
+  if (teamsBtn) teamsBtn.classList.add('hidden');
   state.fromSharedLink = fromSharedLink;
   const totalMs = settings.durationMin * 60 * 1000;
   const FIVE_MIN_MS = 5 * 60 * 1000;
@@ -351,6 +357,7 @@ function resetTimer() {
   stopCloudCoinShowers();
   cancelDeployTyping();
   ideDeploy.classList.add('hidden');
+  if (teamsBtn) teamsBtn.classList.add('hidden');
   setPhase('idle');
   state.halfwayFired = false;
   state.preFinishSlackFired = false;
@@ -408,6 +415,18 @@ function finish() {
 
 function showFinishBanner() {
   finishBanner.classList.remove('hidden');
+  if (finishScore) {
+    // Reward the completed focus session with an arcade-style score popup.
+    const mins = Math.round((state.totalMs || 0) / 60000) || settings.durationMin;
+    finishScore.innerHTML =
+      '<span class="finish-score-line">STAGE&nbsp;CLEAR!</span>' +
+      '<span class="finish-score-xp">+' + (mins * 100) + ' XP &middot; ' + mins + ' focus min</span>';
+    finishScore.classList.remove('hidden');
+    // Re-trigger the entrance animation each time the banner appears.
+    finishScore.classList.remove('pop');
+    void finishScore.offsetWidth;
+    finishScore.classList.add('pop');
+  }
   if (settings.slackMode === 'manual') {
     slackArea.classList.remove('hidden');
     slackStatus.textContent = '';
@@ -436,6 +455,7 @@ function enterDeployState() {
   endboss.dataset.state = 'deploying';
   endboss.classList.remove('stressed', 'roar');
   ideDeploy.classList.remove('hidden');
+  if (teamsBtn) teamsBtn.classList.remove('hidden');
   typeDeployText();
   startCloudCoinShowers();
 }
@@ -597,10 +617,13 @@ function stopCloudCoinShowers() {
   confetti.innerHTML = '';
 }
 
+const CONFETTI_COLORS = ['#ff4d4d', '#4dd2ff', '#5cff6b', '#ff8a3d', '#c47bff', '#fff14d'];
+
 function rainCoins() {
   confetti.innerHTML = '';
-  const count = 60;
-  for (let i = 0; i < count; i++) {
+  // Spinning gold coins (the classic celebration).
+  const coinCount = 50;
+  for (let i = 0; i < coinCount; i++) {
     const c = document.createElement('div');
     c.className = 'coin';
     c.style.left = Math.random() * 100 + 'vw';
@@ -609,8 +632,21 @@ function rainCoins() {
     c.style.width = c.style.height = (14 + Math.random() * 14) + 'px';
     confetti.appendChild(c);
   }
+  // Colourful confetti pieces mixed in — squares and ribbons that sway as they fall.
+  const pieceCount = 70;
+  for (let i = 0; i < pieceCount; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    if (i % 3 === 0) p.classList.add('confetti-piece--ribbon');
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    p.style.animationDuration = (2.4 + Math.random() * 3) + 's';
+    p.style.animationDelay = (Math.random() * 1) + 's';
+    p.style.setProperty('--sway', (8 + Math.random() * 26) + 'px');
+    confetti.appendChild(p);
+  }
   // Clear after last animation
-  setTimeout(() => { confetti.innerHTML = ''; }, 6500);
+  setTimeout(() => { confetti.innerHTML = ''; }, 6800);
 }
 
 // ---------- Sound effects (Web Audio synth chiptune) ----------
@@ -716,7 +752,69 @@ const sfx = {
       src.stop(now + dur + 0.05);
     } catch (_) { /* audio unavailable — ignore */ }
   },
+  // --- Ambient weather SFX (synthesized noise; played at random intervals) ---
+  // A soft rain swell: filtered noise that fades in and out like a passing gust
+  // of heavier rainfall. Low gain so it sits under everything else.
+  rainSwell() {
+    noiseBurst({
+      dur: 1.4 + Math.random() * 1.0,
+      filter: 'lowpass',
+      freqStart: 900 + Math.random() * 400,
+      freqEnd: 1400 + Math.random() * 500,
+      gainPeak: 0.05 + Math.random() * 0.03,
+      attack: 0.4,
+    });
+  },
+  // A wind gust: band-passed noise that whooshes up then trails off.
+  windGust() {
+    noiseBurst({
+      dur: 1.6 + Math.random() * 1.2,
+      filter: 'bandpass',
+      freqStart: 300 + Math.random() * 200,
+      freqEnd: 700 + Math.random() * 500,
+      gainPeak: 0.06 + Math.random() * 0.04,
+      attack: 0.5,
+      q: 0.8,
+    });
+  },
+  // A short clear-day bird chirp: 2–4 quick high notes at random pitches.
+  birds() {
+    const notes = 2 + Math.floor(Math.random() * 3);
+    let t = 0;
+    for (let i = 0; i < notes; i++) {
+      const base = 1800 + Math.random() * 1200;
+      beep(base, 0.06, 'sine', 0.035, t);
+      beep(base * 1.18, 0.05, 'sine', 0.03, t + 0.05);
+      t += 0.12 + Math.random() * 0.12;
+    }
+  },
 };
+
+// Filtered white-noise burst with a fade-in/out envelope and a frequency sweep.
+// Shared by the ambient rain/wind sounds.
+function noiseBurst({ dur = 1.5, filter = 'lowpass', freqStart = 800, freqEnd = 1200, gainPeak = 0.06, attack = 0.4, q = 1 } = {}) {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const ch = buffer.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const f = ctx.createBiquadFilter();
+    f.type = filter;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(freqStart, now);
+    f.frequency.linearRampToValueAtTime(freqEnd, now + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(gainPeak, now + dur * attack); // swell in
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);        // fade out
+    src.connect(f).connect(g).connect(ctx.destination);
+    src.start(now);
+    src.stop(now + dur + 0.05);
+  } catch (_) { /* audio unavailable — ignore */ }
+}
 
 // ---------- IDE typing animation (runs while boss is at laptop) ----------
 const IDE_PROMPTS = [
@@ -734,6 +832,11 @@ const IDE_PROMPTS = [
   'cancel all my meetings',
   'silence failing test for now',
   'git blame someone else',
+  'make it work, then make it my idea',
+  'give me holiday recommendations',
+  'why is the application not starting?',
+  'why I only see Haiku as model option?',
+  
 ];
 let ideTypingHandle = null;
 let ideThinkingDotHandle = null;
@@ -1065,14 +1168,14 @@ function cancelHydrate() {
 const PIPE_CHARACTERS = [
   { id: 'Frank',  shirt: '#e63946', texts: ['Is it ready yet?'] },
   { id: 'QA',     shirt: '#3a86ff', texts: ["We've to check with legal here"] },
-  { id: 'Lars',   shirt: '#fb8500', texts: ['Nooo, not another review', 'Rustaaaggghh'] },
+  { id: 'Lars',   shirt: '#fb8500', texts: ['Nooo, not another review', 'Rustaaaggghh', "I'll work from home until..."] },
   { id: 'Jarno',  shirt: '#2a9d8f', texts: ['Theee!'] },
-  { id: 'Rene',   shirt: '#7c3aed', texts: ['d.n.d. I am Vibe Testing', 'check the new features in the sync timer'] },
+  { id: 'Rene',   shirt: '#7c3aed', texts: ['d.n.d. I am Vibe Testing', 'check the new features in the sync timer', 'maybe risk storming is a good idea?'] },
   { id: 'Marlou', shirt: '#ec4899', texts: ["I'll be back before you know it."] },
   { id: 'Tom',    shirt: '#0d9488', texts: ["CoPilot is doing weird things again"] },
   { id: 'Peter',  shirt: '#fbbf24', texts: ["Let's have some fun. I turned Yolo mode on"] },
-  { id: 'Silke',  shirt: '#4b5563', texts: ["Why am I the only one here in the office?"] },
-  { id: 'Emil',   shirt: '#06b6d4', texts: ["Do you like bitterballs?"] },
+  { id: 'Silke',  shirt: '#4b5563', texts: ["Why am I the only one here in the office?", "I am on 99% of my token budget"] },
+  { id: 'Emil',   shirt: '#06b6d4', texts: ["I've a new idea: code manually"] },
 ];
 const PIPE_VISIT_COUNT = 8;
 const PIPE_VISIT_TAIL_MS = 30 * 1000;
@@ -1374,7 +1477,14 @@ function applyWeather(w) {
       (w.condition === 'cloudy' && night));
     // Thunderstorm gets an extra-dark, ominous tint.
     skyEl.classList.toggle('is-thunder', w.condition === 'thunder');
+    // Clear sky → hide the clouds entirely (blue/starry sky, nothing drifting).
+    skyEl.classList.toggle('is-clear', w.condition === 'clear');
   }
+
+  // Sun — visible during daytime clear or partly-cloudy weather (never at
+  // night, and not during rain/thunder when the sky reads as overcast).
+  document.body.classList.toggle('is-sunny',
+    !night && (w.condition === 'clear' || w.condition === 'cloudy'));
 
   // Cloud drift speed (wind)
   let speedScale = 1;
@@ -1413,10 +1523,14 @@ function applyWeather(w) {
   endboss.classList.toggle('is-cool-shades', sunny);
   endboss.classList.toggle('is-sweating',    w.tempC > 30);
   endboss.classList.toggle('is-shivering',   w.tempC <= 2);
+
+  // Random ambient weather SFX matched to this condition.
+  updateWeatherAmbience();
 }
 
 function clearWeather() {
   stopWeatherRain();
+  stopWeatherAmbience();
   state.weather = null;
 
   const root = document.documentElement;
@@ -1427,7 +1541,8 @@ function clearWeather() {
   // Respect a standalone dark-mode toggle even when weather is cleared.
   setNightMode(settings.darkMode);
   const skyEl = document.querySelector('.sky');
-  if (skyEl) skyEl.classList.remove('is-overcast', 'is-thunder');
+  if (skyEl) skyEl.classList.remove('is-overcast', 'is-thunder', 'is-clear');
+  document.body.classList.remove('is-sunny');
   hidePuddles();
   stopLightning();
   stopLeaves();
@@ -1572,7 +1687,7 @@ function flashLightning() {
   // Thunder follows the flash by a short, slightly random delay (sound lag).
   const thunderDelay = 250 + Math.random() * 600;
   setTimeout(() => {
-    if (settings.effects) sfx.thunder();
+    if (weatherSoundsOn()) sfx.thunder();
   }, thunderDelay);
 }
 
@@ -1597,6 +1712,63 @@ function startLightning() {
 function stopLightning() {
   if (state.lightningHandle) { clearTimeout(state.lightningHandle); state.lightningHandle = null; }
   if (lightning) lightning.classList.remove('flashing');
+}
+
+// ---------- Ambient weather sounds (random, optional) ----------
+// Plays short synthesized weather SFX (rain swells, wind gusts, birdsong) at
+// random intervals matched to the current condition. Gated behind both the
+// master "Sound effects" toggle and the dedicated "Weather sounds" toggle.
+function weatherSoundsOn() {
+  return settings.effects && settings.weatherSoundsEnabled;
+}
+
+// Which ambient sounds suit the current weather. Returns a weighted pool.
+function weatherSoundPool() {
+  const w = state.weather;
+  if (!w) return [];
+  const pool = [];
+  if (w.condition === 'rain' || w.condition === 'thunder') pool.push('rain', 'rain');
+  if (w.windKmh > 25) pool.push('wind');
+  // Birds only on a calm, clear day (not at night / dark mode).
+  if (w.condition === 'clear' && w.isDay && !settings.darkMode && w.windKmh <= 25) pool.push('birds');
+  return pool;
+}
+
+function playRandomWeatherSound() {
+  if (!weatherSoundsOn()) return;
+  const pool = weatherSoundPool();
+  if (!pool.length) return;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (pick === 'rain') sfx.rainSwell();
+  else if (pick === 'wind') sfx.windGust();
+  else if (pick === 'birds') sfx.birds();
+}
+
+function scheduleWeatherAmbience() {
+  clearTimeout(state.weatherAmbienceHandle);
+  // Random gap between ambient cues: 5–15 s, so it never feels metronomic.
+  const delay = 5000 + Math.random() * 10000;
+  state.weatherAmbienceHandle = setTimeout(() => {
+    playRandomWeatherSound();
+    scheduleWeatherAmbience();
+  }, delay);
+}
+
+// Start/stop the ambience loop based on whether the current weather has any
+// matching sounds and the toggles allow it. Safe to call repeatedly.
+function updateWeatherAmbience() {
+  if (weatherSoundsOn() && weatherSoundPool().length) {
+    if (!state.weatherAmbienceHandle) scheduleWeatherAmbience();
+  } else {
+    stopWeatherAmbience();
+  }
+}
+
+function stopWeatherAmbience() {
+  if (state.weatherAmbienceHandle) {
+    clearTimeout(state.weatherAmbienceHandle);
+    state.weatherAmbienceHandle = null;
+  }
 }
 
 let weatherRefreshHandle = null;
@@ -1753,6 +1925,7 @@ function openSettings() {
   if (devModeToggle) devModeToggle.checked = settings.devMode;
   if (fastTopiToggle) fastTopiToggle.checked = settings.fastTopi;
   if (weatherToggle) weatherToggle.checked = settings.weatherEnabled;
+  if (weatherSoundsToggle) weatherSoundsToggle.checked = settings.weatherSoundsEnabled;
   if (weatherLocationInput) weatherLocationInput.value = settings.weatherLocation;
   if (darkModeToggle) darkModeToggle.checked = settings.darkMode;
   validateLocation(settings.weatherLocation);
@@ -1826,6 +1999,15 @@ if (weatherToggle) {
     } else {
       stopWeather();
     }
+  });
+}
+
+if (weatherSoundsToggle) {
+  weatherSoundsToggle.addEventListener('change', () => {
+    settings.weatherSoundsEnabled = weatherSoundsToggle.checked;
+    saveSettings(settings);
+    // Start/stop the ambience loop immediately to match the new preference.
+    updateWeatherAmbience();
   });
 }
 
@@ -2053,7 +2235,9 @@ settingsDialog.addEventListener('close', () => {
 });
 
 // ---------- Clock mode + time picker ----------
-let clockMode = false;
+// Default to clock mode: the Start button opens the time picker rather than
+// starting an immediate countdown.
+let clockMode = true;
 let tpHour = 14;
 let tpMin = 0;
 
@@ -2061,6 +2245,9 @@ function updateStartLabel() {
   const inner = startBtn.querySelector('.start-btn-inner') || startBtn;
   inner.textContent = clockMode ? 'SET NEW TIME' : 'START SYNC';
 }
+
+if (clockBtn) clockBtn.setAttribute('aria-pressed', clockMode ? 'true' : 'false');
+updateStartLabel();
 
 if (clockBtn) {
   clockBtn.addEventListener('click', () => {
@@ -2142,6 +2329,14 @@ pauseBtn.addEventListener('click', pauseToggle);
 resetBtn.addEventListener('click', resetTimer);
 shareBtn.addEventListener('click', copyShareLink);
 dismissFinishBtn.addEventListener('click', hideFinishBanner);
+if (teamsBtn) {
+  teamsBtn.addEventListener('click', () => {
+    if (settings.effects) sfx.click();
+    const url = (window.APP_CONFIG && window.APP_CONFIG.teamsMeetingUrl)
+      || 'https://teams.microsoft.com/l/meeting/new';
+    window.open(url, '_blank', 'noopener');
+  });
+}
 slackBtn.addEventListener('click', sendSlack);
 slackShareBtn.addEventListener('click', sendSlackStart);
 
