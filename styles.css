@@ -37,9 +37,16 @@
   --topi-eye-white:   #ffffff;
   --topi-eye-pupil:   #111111;
   --topi-mouth:       #6b3a00;
-  /* Global scene scale — drives boss + pipes + their bubbles together so the
-     scene grows on large screens (TV) and shrinks on small/short ones. */
-  --scene-scale: 1;
+  /* Global scene scale — drives boss + pipes + timer + their bubbles together
+     so the WHOLE scene grows/shrinks as one unit and their relative geometry
+     never drifts (the timer can't climb onto the boss's face).
+     Fluid + height-aware: takes the smaller of a width- and a height-derived
+     value, so the scene fills a big TV yet can never grow taller than the
+     viewport (which is what caused the timer to overlap the boss). The height
+     divisor (~860) ≈ the stacked timer+gap+boss height at scale 1, so the
+     vertical clearance is preserved at every size. Floored for tiny phones,
+     capped so a 4K wall display stays sane. */
+  --scene-scale: clamp(0.5, min(100vw / 1180px, 100vh / 860px), 2.6);
   /* Weather — cloud drift speed multiplier. 1 = normal, >1 = windier. */
   --cloud-speed-scale: 1;
 }
@@ -120,6 +127,134 @@ body {
   to   { transform: translateX(115vw); }
 }
 
+/* ============================================================
+   BANNER PLANE — pixel-art plane (facing right) towing a message
+   banner. Triggered from JS a couple of times per focus session;
+   the .flying class runs a single left→right sweep. Scaled with
+   --scene-scale so the banner stays readable on a big TV.
+   ============================================================ */
+.plane {
+  position: fixed;
+  top: 8%;
+  left: 0;
+  z-index: 1;               /* above sky/clouds, below the stage + timer panel */
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-60vw) scale(var(--scene-scale));
+  transform-origin: center center;
+  will-change: transform;
+}
+.plane.flying {
+  visibility: visible;
+  opacity: 1;
+  animation: planeFly 26s linear;
+}
+@keyframes planeFly {
+  from { transform: translateX(-55vw) scale(var(--scene-scale)); }
+  to   { transform: translateX(130vw) scale(var(--scene-scale)); }
+}
+
+/* --- Towed banner (trails to the left of the plane) --- */
+.plane-banner {
+  background: #fff;
+  border: 4px solid #000;
+  border-radius: 6px;
+  padding: 10px 22px;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+  /* attached to the plane at its right edge, so it ripples from there */
+  transform-origin: right center;
+  animation: bannerWave 1.8s ease-in-out infinite;
+}
+.plane-banner-text {
+  font-family: var(--pixel-font);
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: #d82020;
+  white-space: nowrap;
+}
+@keyframes bannerWave {
+  0%, 100% { transform: rotate(-1.4deg) skewX(-5deg); }
+  50%      { transform: rotate(1.4deg) skewX(5deg); }
+}
+
+/* --- Tow rope between banner and plane --- */
+.plane-rope {
+  width: 26px;
+  height: 0;
+  border-top: 3px dashed #000;
+  margin: 0 -2px;
+}
+
+/* --- The plane itself (side profile, nose to the right) --- */
+.plane-craft {
+  position: relative;
+  width: 96px;
+  height: 46px;
+  flex: none;
+}
+.plane-fuselage {
+  position: absolute;
+  left: 4px; top: 12px;
+  width: 80px; height: 22px;
+  background: #e23b2e;
+  border: 3px solid #000;
+  border-radius: 12px 16px 16px 12px;
+  box-shadow: inset 0 -5px 0 #a81d13;
+}
+.plane-tailfin {
+  position: absolute;
+  left: 0; top: 0;
+  width: 18px; height: 22px;
+  background: #e23b2e;
+  border: 3px solid #000;
+  border-radius: 8px 4px 0 0;
+  transform: skewX(-18deg);
+}
+.plane-wing {
+  position: absolute;
+  left: 28px; top: 27px;
+  width: 46px; height: 13px;
+  background: #c9302c;
+  border: 3px solid #000;
+  border-radius: 4px;
+  z-index: 2;
+}
+.plane-window {
+  position: absolute;
+  left: 52px; top: 15px;
+  width: 14px; height: 14px;
+  background: #aee3ff;
+  border: 3px solid #000;
+  border-radius: 50%;
+  z-index: 3;
+}
+.plane-nose {
+  position: absolute;
+  right: 4px; top: 15px;
+  width: 16px; height: 16px;
+  background: #ffd23f;
+  border: 3px solid #000;
+  border-radius: 50% 65% 65% 50%;
+  z-index: 2;
+}
+.plane-prop {
+  position: absolute;
+  right: -3px; top: 7px;
+  width: 6px; height: 32px;
+  background: #333;
+  border: 2px solid #000;
+  border-radius: 3px;
+  z-index: 1;
+  animation: planeProp 0.18s linear infinite;
+}
+@keyframes planeProp {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.18); }
+}
+
 /* --- Weather: overcast clouds (grey tint) --- */
 .sky.is-overcast .cloud,
 .sky.is-overcast .cloud::before,
@@ -154,7 +289,8 @@ body.is-night .cloud::after { background: #3a3f4a; }
    .boss-body (not a child), so the boss filter never touches the IDE screen —
    it stays fully readable. Transitions make the day/night swap ease smoothly. */
 .boss-body, .topi, .pipe-character,
-.pipe-rim, .pipe-shaft { transition: filter 1.2s ease; }
+.pipe-rim, .pipe-shaft, .plane { transition: filter 1.2s ease; }
+body.is-night .plane          { filter: brightness(0.8) saturate(0.7) hue-rotate(-10deg); }
 body.is-night .boss-body      { filter: brightness(0.82) saturate(0.72) hue-rotate(-10deg); }
 body.is-night .topi           { filter: brightness(0.84) saturate(0.70) hue-rotate(-10deg); }
 body.is-night .pipe-character { filter: brightness(0.86) saturate(0.78) hue-rotate(-8deg); }
@@ -337,6 +473,12 @@ body.is-night .moon { opacity: 1; }
   justify-content: flex-start;
   gap: 16px;
   padding: 2px 20px 20px;
+  /* Scale the timer + start button with the same factor as the boss, anchored
+     to the top so they grow downward together. Locking timer and boss to one
+     scale keeps their fixed gap proportional, so the timer never overlaps the
+     boss's face regardless of screen size. */
+  transform: scale(var(--scene-scale));
+  transform-origin: top center;
 }
 
 /* ---------- Timer: 16-bit SNES scoreboard style ---------- */
@@ -373,9 +515,10 @@ body.is-night .moon { opacity: 1; }
   pointer-events: none;
 }
 .timer #timerValue {
-  /* Height-aware so the timer can't dominate short laptop viewports and
-     hide the boss; capped at 200px so it stays sane on huge TV screens. */
-  font-size: clamp(64px, min(15vw, 20vh), 168px);
+  /* Fixed base size — the responsive sizing now comes entirely from the
+     .panel transform (var(--scene-scale)), which scales the timer in lockstep
+     with the boss. Keeping a viewport-relative size here would double-scale. */
+  font-size: 150px;
   line-height: 1;
   letter-spacing: 8px;
   color: var(--coin-gold);
@@ -433,7 +576,9 @@ body.is-night .moon { opacity: 1; }
   letter-spacing: 2px;
   color: var(--coin-gold);
   text-shadow: 2px 2px 0 #000;
-  margin-top: -16px;
+  /* Pull up under the timer, but not so far that it tucks behind the timer's
+     6px drop shadow (the panel's 16px flex gap minus this leaves a ~12px gap). */
+  margin-top: -4px;
 }
 
 /* ---------- Start button ---------- */
@@ -1490,14 +1635,14 @@ body:has(.endboss.has-bug) .ide-bug-error {
 .finish-score.hidden { display: none; }
 .finish-score-line {
   font-family: var(--pixel-font);
-  font-size: clamp(16px, 3.4vw, 32px);
+  font-size: clamp(18px, 3.8vw, 38px);
   color: #5cff6b;
   text-shadow: 3px 3px 0 #000, 6px 6px 0 #176b22;
   letter-spacing: 2px;
 }
 .finish-score-xp {
   font-family: var(--pixel-font);
-  font-size: clamp(8px, 1.6vw, 13px);
+  font-size: clamp(10px, 1.9vw, 16px);
   color: var(--coin-gold);
   text-shadow: 2px 2px 0 #000;
   letter-spacing: 1px;
@@ -2121,14 +2266,18 @@ body:has(.endboss.has-bug) .ide-bug-error {
   display: grid;
   grid-template-columns: 1fr;
   justify-items: center;
-  /* Push bubble up to roughly above the boss head.
-     Endboss is 460px tall, anchored 96px from viewport bottom,
-     so head top ≈ 100vh - 522px. Bubble sits ~50px above that. */
+  /* Push bubble up to roughly above the boss head. The boss head height
+     (≈580px at scale 1) scales with --scene-scale, so track it here too — that
+     keeps the bubble's tail planted on the boss's head at every screen size. */
   align-items: end;
-  padding-bottom: 580px;
+  padding-bottom: calc(580px * var(--scene-scale));
 }
 .bubble-layer > .speech-bubble {
   grid-area: 1 / 1;
+  /* These bubbles aren't inside a scaled element (unlike the pipe bubbles,
+     which ride the .pipe transform), so scale their text with the scene. */
+  font-size: calc(18px * var(--scene-scale));
+  padding: calc(16px * var(--scene-scale)) calc(24px * var(--scene-scale));
 }
 
 .speech-bubble {
@@ -2192,9 +2341,10 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
   animation: bubbleWiggle 1.2s ease-in-out infinite;
 }
 
-/* Mobile: boss is scaled to ~0.62, so head sits much lower — adjust offset */
+/* Mobile: the boss bubble offset now tracks the boss head via the scaled
+   calc() padding-bottom, so only the pipe bubbles (which sit outside
+   .bubble-layer) need a readable mobile floor here. */
 @media (max-width: 640px) {
-  .bubble-layer { padding-bottom: 360px; }
   .speech-bubble { font-size: 14px; padding: 12px 18px; }
 }
 
@@ -2260,43 +2410,12 @@ body:has(.endboss.has-bug) .speech-bubble--bug {
 /* ============================================================
    Mobile-ish responsive (desktop-first, but don't be broken)
    ============================================================ */
-/* ---- Width tiers: scale the whole scene via --scene-scale ---- */
-@media (min-width: 1600px) {
-  :root { --scene-scale: 1.2; }
-}
-@media (min-width: 2200px) {
-  /* Big TV / wall display — grow boss, pipes and their bubbles for distance. */
-  :root { --scene-scale: 1.8; }
-  .speech-bubble { font-size: 32px; padding: 24px 40px; }
-}
-@media (min-width: 3200px) {
-  /* 4K wall display viewed from across the room. */
-  :root { --scene-scale: 2.2; }
-  .speech-bubble { font-size: 40px; padding: 28px 48px; }
-}
-@media (max-width: 1100px) and (min-width: 641px) {
-  :root { --scene-scale: 0.8; }
-  .panel { gap: 20px; }
-  .bubble-layer { padding-bottom: 470px; }
-}
+/* Scene scaling (boss + pipes + timer + bubbles) is now driven entirely by the
+   fluid, height-aware --scene-scale in :root — no per-tier overrides needed.
+   Only genuinely non-scale tweaks remain below. The topbar .title lives outside
+   the scaled panel, so it still needs its own mobile shrink. */
 @media (max-width: 640px) {
-  :root { --scene-scale: 0.55; }
-  .timer { padding: 20px 28px; gap: 10px; }
-  .timer #timerValue { letter-spacing: 4px; }
-  .start-btn { font-size: 16px; padding: 18px 32px; }
   .title { font-size: 12px; }
-}
-
-/* ---- Short viewports (laptops): shrink the scene so the big timer no
-   longer collides with / hides the boss. Placed after the width tiers so it
-   wins the --scene-scale cascade on wide-but-short laptop screens. ---- */
-@media (max-height: 820px) {
-  :root { --scene-scale: 0.78; }
-  .timer { padding: 20px 40px; }
-}
-@media (max-height: 640px) {
-  :root { --scene-scale: 0.62; }
-  .timer { padding: 14px 28px; }
 }
 
 /* ============================================================

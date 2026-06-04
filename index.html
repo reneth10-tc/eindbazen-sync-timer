@@ -25,6 +25,22 @@
     <span class="cloud cloud--3"></span>
   </div>
 
+  <!-- Banner plane — pixel-art plane towing a message banner. Flies across the
+       sky a couple of times per focus session. The banner text is set from the
+       PLANE_BANNERS array in app.js (add more strings there to rotate messages). -->
+  <div id="plane" class="plane" aria-hidden="true">
+    <div class="plane-banner"><span id="planeBannerText" class="plane-banner-text">Topicus</span></div>
+    <div class="plane-rope"></div>
+    <div class="plane-craft">
+      <div class="plane-tailfin"></div>
+      <div class="plane-fuselage"></div>
+      <div class="plane-wing"></div>
+      <div class="plane-window"></div>
+      <div class="plane-nose"></div>
+      <div class="plane-prop"></div>
+    </div>
+  </div>
+
   <!-- Mario-style castle on the far horizon -->
   <div class="castle" aria-hidden="true">
     <div class="castle-hill"></div>
@@ -416,6 +432,7 @@
           <button type="button" id="triggerTeaBtn" class="mini-btn btn-secondary">&#x1F375; Trigger tea time</button>
           <button type="button" id="triggerHydrateBtn" class="mini-btn btn-secondary">&#x1F4A7; Trigger hydrate</button>
           <button type="button" id="triggerPipeBtn" class="mini-btn btn-secondary">&#x1F7E2; Trigger pipe</button>
+          <button type="button" id="triggerPlaneBtn" class="mini-btn btn-secondary">&#x2708;&#xFE0F; Trigger plane</button>
           <button type="button" id="triggerFinishBtn" class="mini-btn btn-secondary">&#x1F3C1; Trigger finish</button>
           <label class="field toggle">
             <input type="checkbox" id="fastTopiToggle" />

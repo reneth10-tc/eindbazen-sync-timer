@@ -79,9 +79,12 @@ const triggerRainBtn = $('triggerRainBtn');
 const triggerTeaBtn = $('triggerTeaBtn');
 const triggerHydrateBtn = $('triggerHydrateBtn');
 const triggerPipeBtn = $('triggerPipeBtn');
+const triggerPlaneBtn = $('triggerPlaneBtn');
 const triggerFinishBtn = $('triggerFinishBtn');
 const fastTopiToggle = $('fastTopiToggle');
 const topiEl = document.querySelector('.topi');
+const planeEl = $('plane');
+const planeBannerText = $('planeBannerText');
 const speechBubbleTea = document.querySelector('.speech-bubble--tea');
 const speechBubbleHydrate = document.querySelector('.speech-bubble--hydrate');
 const pipeLeftEl = $('pipeLeft');
@@ -152,6 +155,8 @@ const state = {
   teaTimeHideHandle: null,
   pipeHandles: [],
   pipeInFlight: false,
+  planeHandles: [],   // setTimeout handles for banner-plane flights
+  planeInFlight: false,
   // Weather
   weather: null,          // last fetched/applied weather object
   weatherRain: false,     // true when weather drives continuous rain
@@ -285,6 +290,7 @@ function startTimer({ endAt = null, silent = false, fromSharedLink = false } = {
   scheduleRsiBreaks();
   scheduleRainShowers();
   scheduleTeaTime();
+  schedulePlaneFlights();
   scheduleTick();
   // Re-apply cached weather so it overrides random rain schedule if currently raining.
   if (settings.weatherEnabled && state.weather && !state.fromSharedLink) {
@@ -354,6 +360,7 @@ function resetTimer() {
   cancelRain();
   cancelTeaTime();
   cancelHydrate();
+  cancelPlane();
   stopCloudCoinShowers();
   cancelDeployTyping();
   ideDeploy.classList.add('hidden');
@@ -368,6 +375,10 @@ function resetTimer() {
   endTimeDisplay.classList.add('hidden');
   startBtn.disabled = false;
   startBtn.classList.remove('hidden');
+  // Restore the "SET NEW TIME" default (the time picker flips clockMode off).
+  clockMode = true;
+  if (clockBtn) clockBtn.setAttribute('aria-pressed', 'true');
+  updateStartLabel();
   endboss.dataset.state = 'idle';
   endboss.classList.remove('stressed', 'roar');
   stopIdeTyping();
@@ -394,6 +405,7 @@ function finish() {
   cancelRain();
   cancelTeaTime();
   cancelHydrate();
+  cancelPlane();
   setPhase('finished');
   renderTime(0);
   runControls.classList.add('hidden');
@@ -401,6 +413,12 @@ function finish() {
   shareBtn.disabled = true;
   startBtn.disabled = false;
   startBtn.classList.remove('hidden');
+  // A finished sync returns the Start button to its "SET NEW TIME" default,
+  // even if the last session was launched via the time picker (which flips
+  // clockMode off). The next sync should default to picking a new time.
+  clockMode = true;
+  if (clockBtn) clockBtn.setAttribute('aria-pressed', 'true');
+  updateStartLabel();
 
   endboss.dataset.state = 'defeated';
   endboss.classList.remove('stressed');
@@ -1368,6 +1386,76 @@ function cancelTopi() {
   }
 }
 
+// ---------- Banner plane ----------
+// A pixel-art plane tows a banner across the sky a couple of times per session
+// (kept rare so it stays a treat). To add more messages later, just append
+// strings to PLANE_BANNERS — each flight picks one deterministically.
+const PLANE_BANNERS = ['Topicus', 'Your advertisement here? call Eindbazen', "Don't forget! It's Silke's last week!"];
+const PLANE_VISIT_COUNT = 4;        // flights per session — deliberately rare
+const PLANE_TAIL_MS = 30 * 1000;    // leave the final 30 s clear
+const PLANE_FLY_MS = 26 * 1000;     // time to cross the screen (matches CSS)
+
+function schedulePlaneFlights() {
+  cancelPlane();
+  const now = Date.now();
+  const sessionStart = state.endAt - state.totalMs;
+  const windowEnd = state.endAt - PLANE_TAIL_MS;
+  const windowMs = windowEnd - sessionStart;
+  if (windowMs <= 0) return;
+
+  // Deterministic, evenly-spaced schedule like topi/pipes. Seed offset +2 so the
+  // schedule doesn't sync with topi (seed +0) or the pipe cameos (seed +1), and
+  // shared-link viewers see the same flights at the same wall-clock moments.
+  const rand = mulberry32(Math.floor(state.endAt / 1000) + 2);
+
+  for (let i = 0; i < PLANE_VISIT_COUNT; i++) {
+    const bucketStart = sessionStart + (windowMs / PLANE_VISIT_COUNT) * i;
+    const bucketEnd   = sessionStart + (windowMs / PLANE_VISIT_COUNT) * (i + 1);
+    const when = bucketStart + rand() * (bucketEnd - bucketStart);
+    // Consume a rand() for the message regardless of skip, so the sequence
+    // stays aligned across viewers who join the session at different times.
+    const msgIndex = Math.floor(rand() * PLANE_BANNERS.length);
+    const delay = when - now;
+    if (delay < 0) continue; // already past — skip
+    const h = setTimeout(() => runPlaneFlight(msgIndex), delay);
+    state.planeHandles.push(h);
+  }
+}
+
+function runPlaneFlight(msgIndex = 0) {
+  if (!planeEl) return;
+  if (state.planeInFlight) return; // only one plane at a time
+  state.planeInFlight = true;
+
+  if (planeBannerText) {
+    planeBannerText.textContent = PLANE_BANNERS[msgIndex] || PLANE_BANNERS[0] || '';
+  }
+
+  // Restart the fly animation (remove → reflow → add).
+  planeEl.classList.remove('flying');
+  void planeEl.offsetWidth;
+  planeEl.classList.add('flying');
+
+  const done = (e) => {
+    // Ignore the infinite child animations (bannerWave / planeProp) bubbling up.
+    if (e && e.animationName && e.animationName !== 'planeFly') return;
+    planeEl.classList.remove('flying');
+    state.planeInFlight = false;
+    planeEl.removeEventListener('animationend', done);
+  };
+  planeEl.addEventListener('animationend', done);
+  // Safety net in case animationend is missed (e.g. tab was backgrounded).
+  const h = setTimeout(() => done(), PLANE_FLY_MS + 1500);
+  state.planeHandles.push(h);
+}
+
+function cancelPlane() {
+  state.planeHandles.forEach((h) => clearTimeout(h));
+  state.planeHandles = [];
+  state.planeInFlight = false;
+  if (planeEl) planeEl.classList.remove('flying');
+}
+
 // ---------- Weather module ----------
 // Uses Open-Meteo (free, no API key, CORS-enabled — browser calls it directly).
 // Fetches on enable / session start, refreshes every 20 min.
@@ -2166,6 +2254,17 @@ if (triggerPipeBtn) {
       const text = character.texts[Math.floor(Math.random() * character.texts.length)];
       const pipe = Math.random() < 0.5 ? 'left' : 'right';
       runPipeVisit({ pipe, character, text });
+    }, 80);
+  });
+}
+
+if (triggerPlaneBtn) {
+  triggerPlaneBtn.addEventListener('click', () => {
+    closeSettings();
+    setTimeout(() => {
+      cancelPlane();
+      // Cycle through the available banner messages on repeated manual triggers.
+      runPlaneFlight(state._planeDevIndex = ((state._planeDevIndex || 0) + 1) % PLANE_BANNERS.length);
     }, 80);
   });
 }
